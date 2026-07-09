@@ -41,3 +41,15 @@ def test_empty_board_dimensions():
     board = TextBoardRepresentation([])
     assert board.width == 0
     assert board.height == 0
+
+
+def test_single_cell_board_dimensions():
+    board = TextBoardRepresentation([["wK"]])
+    assert board.width == 1
+    assert board.height == 1
+
+
+def test_single_column_board_dimensions():
+    board = TextBoardRepresentation([["wK"], ["."], ["bK"]])
+    assert board.width == 1
+    assert board.height == 3

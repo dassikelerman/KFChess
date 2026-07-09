@@ -36,3 +36,31 @@ def test_run_accepts_injected_config(capsys):
 def test_dispatch_ignores_blank_command():
     # Should not raise for an empty command line.
     main_module._dispatch("", engine=None, renderer=None)
+
+
+def test_run_canonical_output_normalizes_whitespace(capsys):
+    lines = ["Board:", "wK    .\tbK", "Commands:", "print"]
+    main_module.run(lines)
+    out = capsys.readouterr().out
+    assert out.strip() == "wK . bK"
+
+
+def test_run_prints_multi_row_board(capsys):
+    lines = ["Board:", "wK . bK", ". . .", "Commands:", "print"]
+    main_module.run(lines)
+    out = capsys.readouterr().out
+    assert out.strip("\n") == "wK . bK\n. . ."
+
+
+def test_run_prints_empty_string_for_empty_board(capsys):
+    lines = ["Board:", "Commands:", "print"]
+    main_module.run(lines)
+    out = capsys.readouterr().out
+    assert out == "\n"
+
+
+def test_run_no_output_without_print_command(capsys):
+    lines = ["Board:", "wK . bK", "Commands:"]
+    main_module.run(lines)
+    out = capsys.readouterr().out
+    assert out == ""
