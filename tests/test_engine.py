@@ -113,6 +113,30 @@ def test_move_lands_after_move_duration_elapses():
     assert board.is_empty(0, 0)
 
 
+def test_move_does_not_land_before_duration_fully_elapses():
+    engine, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))
+
+    engine.wait(settings.MOVE_DURATION * 2 - 1)  # one millisecond short of arrival
+    assert board.get(0, 0) == "wR"
+    assert board.is_empty(0, 2)
+
+
+def test_wait_calls_accumulate_toward_arrival_time():
+    engine, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))
+
+    engine.wait(settings.MOVE_DURATION)  # halfway there: still original position
+    assert board.get(0, 0) == "wR"
+    assert board.is_empty(0, 2)
+
+    engine.wait(settings.MOVE_DURATION)  # the rest of the duration: now it lands
+    assert board.get(0, 2) == "wR"
+    assert board.is_empty(0, 0)
+
+
 def test_illegal_move_keeps_selection_and_piece_in_place():
     engine, board = make_engine([["wN", ".", "."], [".", ".", "."], [".", ".", "."]])
     engine.handle_click(*cell_to_pixel(0, 0))

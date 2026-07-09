@@ -97,3 +97,23 @@ def test_run_print_board_before_move_settles_shows_original_position(capsys):
     main_module.run(lines)
     out = capsys.readouterr().out
     assert out.strip("\n") == "wR . .\n. . .\n. . ."
+
+
+def test_run_move_appears_only_after_enough_accumulated_wait(capsys):
+    lines = [
+        "Board:",
+        "wR . .",
+        ". . .",
+        ". . .",
+        "Commands:",
+        "click 50 50",
+        "click 250 50",
+        "wait 1000",
+        "print board",
+        "wait 1000",
+        "print board",
+    ]
+    main_module.run(lines)
+    rows = capsys.readouterr().out.strip("\n").split("\n")
+    assert "\n".join(rows[:3]) == "wR . .\n. . .\n. . ."
+    assert "\n".join(rows[3:]) == ". . wR\n. . .\n. . ."
