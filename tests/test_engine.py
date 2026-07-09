@@ -388,6 +388,47 @@ def test_injected_promotion_rule_overrides_default_behaviour():
     assert board.get(0, 0) == "wP"
 
 
+def test_cannot_select_a_piece_that_is_mid_move():
+    engine, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))  # move queued, (0, 0) now busy
+    assert engine.selected is None
+
+    engine.handle_click(*cell_to_pixel(0, 0))  # try to re-select the moving piece
+    assert engine.selected is None
+
+
+def test_piece_cannot_be_redirected_while_moving():
+    engine, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))  # original move: (0, 0) -> (0, 2)
+
+    engine.wait(settings.MOVE_DURATION)  # partway through the move
+    engine.handle_click(*cell_to_pixel(0, 0))  # attempt to re-select mid-flight
+    engine.handle_click(*cell_to_pixel(2, 0))  # attempt to redirect to a new target
+
+    engine.wait(settings.MOVE_DURATION * 2)  # finish out the original move's duration
+    assert board.get(0, 2) == "wR"  # landed at the original target, not the redirect
+    assert board.is_empty(2, 0)
+
+
+def test_piece_moves_again_immediately_after_arrival_with_no_cooldown():
+    engine, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))
+    engine.wait(settings.MOVE_DURATION * 2)  # first move lands
+    assert board.get(0, 2) == "wR"
+
+    # immediately queue a second move for the same piece, no extra wait beforehand
+    engine.handle_click(*cell_to_pixel(0, 2))
+    assert engine.selected == (0, 2)  # selectable right away
+    engine.handle_click(*cell_to_pixel(2, 2))
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert board.get(2, 2) == "wR"
+    assert board.is_empty(0, 2)
+
+
 def test_render_returns_current_board_text():
     engine, board = make_engine([["wK", "."], [".", "bK"]])
     text = engine.render(BoardRenderer())
