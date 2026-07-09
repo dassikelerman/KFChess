@@ -120,6 +120,20 @@ def test_pawn_double_step_requires_clear_path_and_start_row():
     assert not pawn.is_legal(-2, 0, context(board, "w", (7, 4), (5, 4)))
 
 
+def test_pawn_cannot_move_two_cells_off_the_start_row():
+    board = empty_board()
+    pawn = PawnMovement({"w": -1, "b": 1})
+    # row 5 is not white's start row (row 7), even though the path is clear
+    assert not pawn.is_legal(-2, 0, context(board, "w", (5, 4), (3, 4)))
+
+
+def test_pawn_cannot_capture_forward():
+    board = empty_board()
+    board.set(5, 4, "bP")
+    pawn = PawnMovement({"w": -1, "b": 1})
+    assert not pawn.is_legal(-1, 0, context(board, "w", (6, 4), (5, 4)))
+
+
 def test_pawn_diagonal_capture_only_when_occupied():
     board = empty_board()
     pawn = PawnMovement({"w": -1, "b": 1})
@@ -127,3 +141,39 @@ def test_pawn_diagonal_capture_only_when_occupied():
 
     board.set(5, 5, "bP")
     assert pawn.is_legal(-1, 1, context(board, "w", (6, 4), (5, 5)))
+
+
+def test_black_pawn_single_step_forward():
+    board = empty_board()
+    pawn = PawnMovement({"w": -1, "b": 1})
+    assert pawn.is_legal(1, 0, context(board, "b", (1, 4), (2, 4)))
+    assert not pawn.is_legal(-1, 0, context(board, "b", (1, 4), (0, 4)))  # wrong direction
+
+
+def test_black_pawn_double_step_requires_clear_path_and_start_row():
+    board = empty_board()
+    pawn = PawnMovement({"w": -1, "b": 1})
+    # black's start row is row 0 regardless of board height
+    assert pawn.is_legal(2, 0, context(board, "b", (0, 4), (2, 4)))
+
+    board.set(1, 4, "wP")
+    assert not pawn.is_legal(2, 0, context(board, "b", (0, 4), (2, 4)))
+
+    # not legal once the pawn is off its start row, even with a clear path
+    assert not pawn.is_legal(2, 0, context(board, "b", (1, 4), (3, 4)))
+
+
+def test_black_pawn_diagonal_capture_only_when_occupied():
+    board = empty_board()
+    pawn = PawnMovement({"w": -1, "b": 1})
+    assert not pawn.is_legal(1, 1, context(board, "b", (1, 4), (2, 5)))
+
+    board.set(2, 5, "wP")
+    assert pawn.is_legal(1, 1, context(board, "b", (1, 4), (2, 5)))
+
+
+def test_black_pawn_cannot_capture_forward():
+    board = empty_board()
+    board.set(2, 4, "wP")
+    pawn = PawnMovement({"w": -1, "b": 1})
+    assert not pawn.is_legal(1, 0, context(board, "b", (1, 4), (2, 4)))

@@ -240,6 +240,64 @@ def test_move_captures_enemy_piece_at_destination():
     assert board.is_empty(0, 0)
 
 
+def test_white_pawn_moves_upward():
+    # 4-row board: white's start row is height - 1 = 3
+    rows = [[".", ".", "."], [".", ".", "."], [".", ".", "."], ["wP", ".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(3, 0))
+    engine.handle_click(*cell_to_pixel(2, 0))
+    engine.wait(settings.MOVE_DURATION)
+
+    assert board.get(2, 0) == "wP"
+    assert board.is_empty(3, 0)
+
+
+def test_black_pawn_moves_downward():
+    rows = [["bP", ".", "."], [".", ".", "."], [".", ".", "."], [".", ".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(1, 0))
+    engine.wait(settings.MOVE_DURATION)
+
+    assert board.get(1, 0) == "bP"
+    assert board.is_empty(0, 0)
+
+
+def test_pawn_double_step_off_start_row_is_ignored():
+    # pawn sits on row 2, which is not white's start row (3) on this 4-row board
+    rows = [[".", ".", "."], [".", ".", "."], ["wP", ".", "."], [".", ".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(2, 0))
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert engine.selected == (2, 0)
+    assert board.get(2, 0) == "wP"
+
+
+def test_pawn_cannot_capture_forward():
+    rows = [[".", ".", "."], ["bP", ".", "."], ["wP", ".", "."], [".", ".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(2, 0))
+    engine.handle_click(*cell_to_pixel(1, 0))
+    engine.wait(settings.MOVE_DURATION)
+
+    assert engine.selected == (2, 0)
+    assert board.get(2, 0) == "wP"
+    assert board.get(1, 0) == "bP"
+
+
+def test_pawn_captures_diagonally():
+    rows = [[".", ".", "."], [".", "bP", "."], ["wP", ".", "."], [".", ".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(2, 0))
+    engine.handle_click(*cell_to_pixel(1, 1))
+    engine.wait(settings.MOVE_DURATION)
+
+    assert board.get(1, 1) == "wP"
+    assert board.is_empty(2, 0)
+
+
 def test_cannot_capture_own_color_piece_stays_in_place():
     engine, board = make_engine([["wR", ".", "wP"], [".", ".", "."], [".", ".", "."]])
     engine.handle_click(*cell_to_pixel(0, 0))
