@@ -154,6 +154,9 @@ class GameEngine:
 
     def _settle_move(self, move):
         if self._is_intercepted(move):
+            if self._win_condition.is_game_over(move.piece):
+                self._game_over = True
+            self._board.set(*move.start, self._config.EMPTY_CELL)
             return
 
         r, c = move.end
