@@ -29,6 +29,12 @@ def test_king_moves_one_square_any_direction():
     assert not king.is_legal(2, 0, context(board, "w", (4, 4), (6, 4)))
 
 
+def test_king_rejects_null_move():
+    board = empty_board()
+    king = KingMovement()
+    assert not king.is_legal(0, 0, context(board, "w", (4, 4), (4, 4)))
+
+
 def test_rook_blocked_by_piece():
     board = empty_board()
     board.set(4, 6, "bP")
@@ -42,11 +48,24 @@ def test_rook_clear_path():
     assert rook.is_legal(0, 3, context(board, "w", (4, 4), (4, 7)))
 
 
+def test_rook_rejects_diagonal_move():
+    board = empty_board()
+    rook = RookMovement()
+    assert not rook.is_legal(3, 3, context(board, "w", (4, 4), (7, 7)))
+
+
 def test_bishop_requires_diagonal():
     board = empty_board()
     bishop = BishopMovement()
     assert bishop.is_legal(2, 2, context(board, "w", (2, 2), (4, 4)))
     assert not bishop.is_legal(2, 3, context(board, "w", (2, 2), (4, 5)))
+
+
+def test_bishop_blocked_by_piece():
+    board = empty_board()
+    board.set(3, 3, "bP")
+    bishop = BishopMovement()
+    assert not bishop.is_legal(2, 2, context(board, "w", (2, 2), (4, 4)))
 
 
 def test_queen_moves_straight_or_diagonal():
@@ -57,11 +76,24 @@ def test_queen_moves_straight_or_diagonal():
     assert not queen.is_legal(3, 1, context(board, "w", (0, 0), (3, 1)))
 
 
+def test_queen_blocked_by_piece():
+    board = empty_board()
+    board.set(0, 2, "bP")
+    queen = QueenMovement()
+    assert not queen.is_legal(0, 3, context(board, "w", (0, 0), (0, 3)))
+
+
 def test_knight_l_shape():
     board = empty_board()
     knight = KnightMovement()
     assert knight.is_legal(2, 1, context(board, "w", (0, 0), (2, 1)))
     assert not knight.is_legal(2, 2, context(board, "w", (0, 0), (2, 2)))
+
+
+def test_knight_rejects_straight_move():
+    board = empty_board()
+    knight = KnightMovement()
+    assert not knight.is_legal(0, 3, context(board, "w", (0, 0), (0, 3)))
 
 
 def test_pawn_single_step_forward():

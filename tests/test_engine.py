@@ -122,6 +122,79 @@ def test_illegal_move_keeps_selection_and_piece_in_place():
     assert board.get(0, 0) == "wN"
 
 
+def test_king_legal_one_step_move_lands():
+    engine, board = make_engine([["wK", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(1, 1))
+    engine.wait(settings.MOVE_DURATION)
+
+    assert board.get(1, 1) == "wK"
+    assert board.is_empty(0, 0)
+
+
+def test_king_illegal_two_cell_move_is_ignored():
+    engine, board = make_engine([["wK", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(2, 0))  # two cells: illegal for a king
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert engine.selected == (0, 0)
+    assert board.get(0, 0) == "wK"
+
+
+def test_rook_illegal_diagonal_move_is_ignored():
+    engine, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(2, 2))  # diagonal: illegal for a rook
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert engine.selected == (0, 0)
+    assert board.get(0, 0) == "wR"
+
+
+def test_bishop_legal_diagonal_move_lands():
+    engine, board = make_engine([["wB", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(2, 2))
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert board.get(2, 2) == "wB"
+    assert board.is_empty(0, 0)
+
+
+def test_bishop_illegal_straight_move_is_ignored():
+    engine, board = make_engine([["wB", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))  # straight: illegal for a bishop
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert engine.selected == (0, 0)
+    assert board.get(0, 0) == "wB"
+
+
+def test_queen_legal_straight_and_diagonal_moves_land():
+    engine, board = make_engine([["wQ", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))
+    engine.wait(settings.MOVE_DURATION * 2)
+    assert board.get(0, 2) == "wQ"
+
+    engine.handle_click(*cell_to_pixel(0, 2))
+    engine.handle_click(*cell_to_pixel(2, 0))
+    engine.wait(settings.MOVE_DURATION * 2)
+    assert board.get(2, 0) == "wQ"
+
+
+def test_knight_legal_l_shape_move_lands():
+    engine, board = make_engine([["wN", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(2, 1))
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert board.get(2, 1) == "wN"
+    assert board.is_empty(0, 0)
+
+
 def test_king_capture_ends_the_game():
     rows = [["wR", ".", "bK"], [".", ".", "."], [".", ".", "."]]
     engine, board = make_engine(rows)
