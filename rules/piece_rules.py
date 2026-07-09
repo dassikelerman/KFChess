@@ -61,18 +61,22 @@ class KnightMovement(MovementStrategy):
 
 
 class PawnMovement(MovementStrategy):
-    """Pawn behaviour depends on per-color direction/start-row config,
-    which is injected rather than hardcoded, so board layouts or custom
-    variants can change it without editing this class.
+    """Pawn behaviour depends on per-color direction, which is injected
+    rather than hardcoded, so board layouts or custom variants can change
+    it without editing this class.
+
+    A pawn's start row is derived from the board's own height rather than
+    a fixed number, since boards in this game vary in size: a color's
+    start row is whichever edge it moves away from (row 0 if it advances
+    downward, the last row if it advances upward).
     """
 
-    def __init__(self, directions, start_rows):
+    def __init__(self, directions):
         self._directions = directions
-        self._start_rows = start_rows
 
     def is_legal(self, dr, dc, context):
         direction = self._directions[context.color]
-        start_row = self._start_rows[context.color]
+        start_row = context.board.height - 1 if direction < 0 else 0
         sr, _sc = context.start
 
         if dc == 0:

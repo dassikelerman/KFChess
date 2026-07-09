@@ -17,8 +17,5 @@ COLORS = ("w", "b")
 # Row delta a pawn advances by on a single step, per color
 PAWN_DIRECTION = {"w": -1, "b": 1}
 
-# Starting row (0-indexed) from which each color's pawns may take a double step
-PAWN_START_ROW = {"w": 1, "b": 6}
-
 # Token used to represent an empty cell on the board
 EMPTY_CELL = "."

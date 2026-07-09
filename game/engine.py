@@ -109,9 +109,12 @@ class GameEngine:
         if not self._is_legal_move(piece, start, cell):
             return  # illegal target: keep current selection
 
-        self._board.set(*start, self._config.EMPTY_CELL)
+        if self._opposite_color_moving(piece[0]):
+            return  # opposing color has a move in flight: keep current selection
+
+        distance = max(abs(cell[0] - start[0]), abs(cell[1] - start[1]))
         self._active_moves.append(
-            Move(piece, start, cell, self._clock + self._config.MOVE_DURATION)
+            Move(piece, start, cell, self._clock + self._config.MOVE_DURATION * distance)
         )
         self._selected = None
 
@@ -129,6 +132,9 @@ class GameEngine:
 
     def _is_busy(self, cell):
         return self._is_moving_from(cell) or self._is_jumping_on(cell)
+
+    def _opposite_color_moving(self, color):
+        return any(move.piece[0] != color for move in self._active_moves)
 
     def _is_moving_from(self, cell):
         return any(move.start == cell for move in self._active_moves)
@@ -159,6 +165,7 @@ class GameEngine:
         if self._win_condition.is_game_over(captured):
             self._game_over = True
 
+        self._board.set(*move.start, self._config.EMPTY_CELL)
         piece = self._promotion_rule.promote(move.piece, r, self._board.height)
         self._board.set(r, c, piece)
 
