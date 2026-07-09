@@ -50,6 +50,50 @@ def test_click_out_of_bounds_is_ignored():
     assert engine.selected is None
 
 
+def test_click_empty_cell_with_no_selection_is_ignored():
+    engine, board = make_engine([["wK", "."], [".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 1))
+    assert engine.selected is None
+    assert board.get(0, 0) == "wK"
+
+
+def test_pixel_to_cell_matches_spec_examples():
+    # click 50 50 -> center of the top-left cell (0, 0)
+    # click 150 50 -> the next cell to the right (0, 1)
+    engine, board = make_engine([["wR", "wQ", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(50, 50)
+    assert engine.selected == (0, 0)
+    engine.handle_click(150, 50)
+    assert engine.selected == (0, 1)  # friendly piece: selection replaced, not moved
+    assert board.get(0, 0) == "wR"
+    assert board.get(0, 1) == "wQ"
+
+
+def test_click_friendly_piece_replaces_selection():
+    engine, board = make_engine([["wR", "wQ", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    assert engine.selected == (0, 0)
+
+    engine.handle_click(*cell_to_pixel(0, 1))
+    assert engine.selected == (0, 1)
+    # no move was queued for either piece
+    assert board.get(0, 0) == "wR"
+    assert board.get(0, 1) == "wQ"
+
+
+def test_click_on_busy_friendly_piece_does_not_replace_selection():
+    engine, board = make_engine([["wR", ".", "."], ["wB", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))  # rook move queued, (0, 0) now busy
+    assert engine.selected is None
+
+    engine.handle_click(*cell_to_pixel(1, 0))  # select the bishop
+    assert engine.selected == (1, 0)
+
+    engine.handle_click(*cell_to_pixel(0, 0))  # rook's old cell is still busy
+    assert engine.selected == (1, 0)  # selection unchanged
+
+
 def test_selecting_then_moving_starts_a_move():
     engine, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
     engine.handle_click(*cell_to_pixel(0, 0))

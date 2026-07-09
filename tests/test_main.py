@@ -64,3 +64,36 @@ def test_run_no_output_without_print_command(capsys):
     main_module.run(lines)
     out = capsys.readouterr().out
     assert out == ""
+
+
+def test_run_click_wait_print_board_moves_piece(capsys):
+    lines = [
+        "Board:",
+        "wR . .",
+        ". . .",
+        ". . .",
+        "Commands:",
+        "click 50 50",
+        "click 250 50",
+        "wait 2000",
+        "print board",
+    ]
+    main_module.run(lines)
+    out = capsys.readouterr().out
+    assert out.strip("\n") == ". . wR\n. . .\n. . ."
+
+
+def test_run_print_board_before_move_settles_shows_original_position(capsys):
+    lines = [
+        "Board:",
+        "wR . .",
+        ". . .",
+        ". . .",
+        "Commands:",
+        "click 50 50",
+        "click 250 50",
+        "print board",
+    ]
+    main_module.run(lines)
+    out = capsys.readouterr().out
+    assert out.strip("\n") == "wR . .\n. . .\n. . ."
