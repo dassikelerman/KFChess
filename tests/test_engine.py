@@ -195,6 +195,63 @@ def test_knight_legal_l_shape_move_lands():
     assert board.is_empty(0, 0)
 
 
+def test_rook_blocked_by_piece_is_ignored():
+    engine, board = make_engine([["wR", "bP", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))  # blocked by the piece at (0, 1)
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert engine.selected == (0, 0)
+    assert board.get(0, 0) == "wR"
+    assert board.get(0, 1) == "bP"
+
+
+def test_bishop_blocked_by_piece_is_ignored():
+    engine, board = make_engine([["wB", ".", "."], [".", "bP", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(2, 2))  # blocked by the piece at (1, 1)
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert engine.selected == (0, 0)
+    assert board.get(0, 0) == "wB"
+    assert board.get(1, 1) == "bP"
+
+
+def test_knight_jumps_over_blockers_and_lands():
+    engine, board = make_engine([["wN", "wP", "."], ["wP", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(2, 1))
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert board.get(2, 1) == "wN"
+    assert board.is_empty(0, 0)
+    # blockers were untouched, proving the knight jumped rather than moved through them
+    assert board.get(0, 1) == "wP"
+    assert board.get(1, 0) == "wP"
+
+
+def test_move_captures_enemy_piece_at_destination():
+    engine, board = make_engine([["wR", ".", "bP"], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert board.get(0, 2) == "wR"
+    assert board.is_empty(0, 0)
+
+
+def test_cannot_capture_own_color_piece_stays_in_place():
+    engine, board = make_engine([["wR", ".", "wP"], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    # clicking a friendly piece replaces the selection instead of capturing it
+    assert engine.selected == (0, 2)
+    assert board.get(0, 0) == "wR"
+    assert board.get(0, 2) == "wP"
+
+
 def test_king_capture_ends_the_game():
     rows = [["wR", ".", "bK"], [".", ".", "."], [".", ".", "."]]
     engine, board = make_engine(rows)

@@ -96,6 +96,14 @@ def test_knight_rejects_straight_move():
     assert not knight.is_legal(0, 3, context(board, "w", (0, 0), (0, 3)))
 
 
+def test_knight_ignores_blockers():
+    board = empty_board()
+    board.set(1, 0, "wP")
+    board.set(1, 1, "bP")
+    knight = KnightMovement()
+    assert knight.is_legal(2, 1, context(board, "w", (0, 0), (2, 1)))
+
+
 def test_pawn_single_step_forward():
     board = empty_board()
     pawn = PawnMovement({"w": -1, "b": 1})
