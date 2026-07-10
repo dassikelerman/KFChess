@@ -429,6 +429,68 @@ def test_piece_moves_again_immediately_after_arrival_with_no_cooldown():
     assert board.is_empty(0, 2)
 
 
+def test_cannot_queue_move_while_opposite_color_piece_is_in_flight():
+    rows = [["bR", ".", "."], [".", ".", "."], [".", ".", "wR"]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))  # black move queued, arrives at t=2000
+
+    engine.wait(500)
+    engine.handle_click(*cell_to_pixel(2, 2))  # select white rook
+    engine.handle_click(*cell_to_pixel(2, 0))  # attempt: rejected, black still in flight
+
+    assert engine.selected == (2, 2)  # selection is preserved, not cleared
+    assert board.get(2, 2) == "wR"
+    assert board.is_empty(2, 0)
+
+
+def test_move_becomes_possible_once_opposite_color_move_settles():
+    rows = [["bR", ".", "."], [".", ".", "."], [".", ".", "wR"]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))  # black move queued, arrives at t=2000
+
+    engine.wait(500)
+    engine.handle_click(*cell_to_pixel(2, 2))
+    engine.handle_click(*cell_to_pixel(2, 0))  # rejected, black still in flight
+
+    engine.wait(1600)  # total clock 2100: black's move has now settled
+    engine.handle_click(*cell_to_pixel(2, 0))  # re-attempt with the same selection
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert board.get(2, 0) == "wR"
+    assert board.is_empty(2, 2)
+
+
+def test_same_color_moves_can_be_in_flight_simultaneously():
+    rows = [["wR", ".", "wN"], [".", ".", "."], [".", ".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(2, 0))  # rook: (0,0) -> (2,0)
+
+    engine.handle_click(*cell_to_pixel(0, 2))
+    engine.handle_click(*cell_to_pixel(2, 1))  # knight: (0,2) -> (2,1), no gate blocks same color
+
+    engine.wait(settings.MOVE_DURATION * 2)
+    assert board.get(2, 0) == "wR"
+    assert board.get(2, 1) == "wN"
+
+
+def test_two_friendly_moves_racing_to_the_same_destination_first_queued_wins():
+    rows = [["wR", ".", "."], [".", ".", "."], ["wB", ".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))  # rook queued first: (0,0) -> (0,2)
+
+    engine.handle_click(*cell_to_pixel(2, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))  # bishop queued second, same destination
+
+    engine.wait(settings.MOVE_DURATION * 2)  # both moves arrive on the same tick
+
+    assert board.get(0, 2) == "wR"  # first-queued piece wins the cell
+    assert board.get(2, 0) == "wB"  # second piece silently stays put, no duplication/crash
+
+
 def test_render_returns_current_board_text():
     engine, board = make_engine([["wK", "."], [".", "bK"]])
     text = engine.render(BoardRenderer())
