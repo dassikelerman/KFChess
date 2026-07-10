@@ -395,6 +395,85 @@ def test_jump_intercepts_a_move_of_the_opposite_color():
     assert board.get(0, 1) == "bP"  # move was intercepted, target unchanged
 
 
+def test_jump_does_not_move_the_piece():
+    engine, board = make_engine([["bP", "."], [".", "."]])
+    engine.handle_jump(*cell_to_pixel(0, 0))
+
+    assert board.get(0, 0) == "bP"  # still on its own cell, board untouched by the jump itself
+
+
+def test_intercepted_move_removes_the_arriving_piece_entirely():
+    rows = [["wR", "bP"], [".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 1))
+    engine.handle_jump(*cell_to_pixel(0, 1))
+
+    engine.wait(settings.JUMP_DURATION)
+    assert board.get(0, 1) == "bP"  # airborne piece remains in its original cell
+    assert board.is_empty(0, 0)  # the arriving piece is removed, not left at its source
+
+
+def test_jump_lands_normally_and_piece_can_move_again_if_no_interception():
+    engine, board = make_engine([["bP", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_jump(*cell_to_pixel(0, 0))
+    engine.wait(settings.JUMP_DURATION)  # jump window elapses with no enemy arrival
+
+    engine.handle_click(*cell_to_pixel(0, 0))
+    assert engine.selected == (0, 0)  # no longer airborne/busy, selectable again
+    engine.handle_click(*cell_to_pixel(1, 0))
+    engine.wait(settings.MOVE_DURATION)
+
+    assert board.get(1, 0) == "bP"
+    assert board.is_empty(0, 0)
+
+
+def test_moving_piece_cannot_jump():
+    engine, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))  # rook now mid-move, (0, 0) is busy
+
+    engine.handle_jump(*cell_to_pixel(0, 0))  # rejected: a moving piece cannot jump
+    engine.wait(settings.JUMP_DURATION)
+
+    # nothing intercepts the rook's own move; it lands normally
+    engine.wait(settings.MOVE_DURATION * 2)
+    assert board.get(0, 2) == "wR"
+
+
+def test_airborne_piece_cannot_be_selected_or_moved():
+    engine, board = make_engine([["bP", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_jump(*cell_to_pixel(0, 0))
+
+    engine.handle_click(*cell_to_pixel(0, 0))
+    assert engine.selected is None  # cannot select a piece while it's airborne
+
+
+def test_jump_on_empty_cell_is_ignored():
+    engine, board = make_engine([["wR", "bP", "."], [".", ".", "."], [".", ".", "."]])
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 1))
+    engine.wait(settings.MOVE_DURATION)  # bP is captured; (0, 0) is now empty
+
+    engine.handle_jump(*cell_to_pixel(0, 0))  # a captured piece cannot jump: nothing there
+    engine.wait(settings.JUMP_DURATION)
+    assert board.is_empty(0, 0)
+    assert board.get(0, 1) == "wR"  # unaffected
+
+
+def test_king_intercepted_by_jump_ends_the_game():
+    rows = [["wK", ".", "."], ["bP", ".", "."], [".", ".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_jump(*cell_to_pixel(1, 0))  # bP jumps in place, guarding (1, 0)
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(1, 0))  # white king walks into the intercept
+
+    engine.wait(settings.MOVE_DURATION)
+    assert engine.game_over is True
+    assert board.get(1, 0) == "bP"
+    assert board.is_empty(0, 0)
+
+
 def test_pawn_promotion_on_arrival():
     # white pawn one step from the last rank (row 0)
     rows = [[".", ".", "."], ["wP", ".", "."], [".", ".", "."]]
