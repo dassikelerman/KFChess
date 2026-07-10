@@ -407,6 +407,31 @@ def test_pawn_promotion_on_arrival():
     assert board.get(0, 0) == "wQ"
 
 
+def test_black_pawn_promotes_to_queen_on_arrival():
+    # black pawn one step from the last rank (row 2 on a 3-row board)
+    rows = [[".", ".", "."], ["bP", ".", "."], [".", ".", "."]]
+    engine, board = make_engine(rows)
+
+    engine.handle_click(*cell_to_pixel(1, 0))
+    engine.handle_click(*cell_to_pixel(2, 0))
+    engine.wait(settings.MOVE_DURATION)
+
+    assert board.get(2, 0) == "bQ"
+
+
+def test_pawn_double_step_onto_last_rank_promotes_in_one_motion():
+    # white's start row is the board's last row (height - 1 = 2); double-stepping
+    # from there lands directly on row 0, the promotion rank.
+    rows = [[".", ".", "."], [".", ".", "."], ["wP", ".", "."]]
+    engine, board = make_engine(rows)
+
+    engine.handle_click(*cell_to_pixel(2, 0))
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.wait(settings.MOVE_DURATION * 2)
+
+    assert board.get(0, 0) == "wQ"
+
+
 def test_injected_promotion_rule_overrides_default_behaviour():
     rows = [[".", ".", "."], ["wP", ".", "."], [".", ".", "."]]
     engine, board = make_engine(rows, promotion_rule=NoPromotion())
