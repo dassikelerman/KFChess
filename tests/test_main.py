@@ -99,6 +99,27 @@ def test_run_print_board_before_move_settles_shows_original_position(capsys):
     assert out.strip("\n") == "wR . .\n. . .\n. . ."
 
 
+def test_run_ignores_move_commands_after_game_over(capsys):
+    lines = [
+        "Board:",
+        "wR . bK",
+        ". . .",
+        "wN . .",
+        "Commands:",
+        "click 50 50",
+        "click 250 50",
+        "wait 2000",
+        "print board",
+        "click 50 250",
+        "click 150 250",
+        "wait 2000",
+        "print board",
+    ]
+    main_module.run(lines)
+    rows = capsys.readouterr().out.strip("\n").split("\n")
+    assert "\n".join(rows[:3]) == "\n".join(rows[3:])  # unchanged by the post-game-over clicks
+
+
 def test_run_move_appears_only_after_enough_accumulated_wait(capsys):
     lines = [
         "Board:",

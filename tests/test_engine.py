@@ -344,6 +344,36 @@ def test_king_capture_ends_the_game():
     assert engine.game_over is True
 
 
+def test_click_after_game_over_is_ignored():
+    rows = [["wR", ".", "bK"], [".", ".", "."], ["wN", ".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))
+    engine.wait(settings.MOVE_DURATION * 2)
+    assert engine.game_over is True
+
+    engine.handle_click(*cell_to_pixel(2, 0))  # attempt to select the knight
+    assert engine.selected is None
+
+    engine.handle_click(*cell_to_pixel(2, 1))  # attempt to move it
+    engine.wait(settings.MOVE_DURATION)
+
+    assert board.get(2, 0) == "wN"  # untouched: the click never took effect
+    assert board.is_empty(2, 1)
+
+
+def test_render_still_reflects_final_state_after_game_over():
+    rows = [["wR", ".", "bK"], [".", ".", "."], [".", ".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))
+    engine.wait(settings.MOVE_DURATION * 2)
+    assert engine.game_over is True
+
+    text = engine.render(BoardRenderer())
+    assert text == ". . wR\n. . .\n. . ."
+
+
 def test_injected_win_condition_overrides_default_behaviour():
     rows = [["wR", ".", "bK"], [".", ".", "."], [".", ".", "."]]
     engine, board = make_engine(rows, win_condition=NeverEndsWinCondition())
