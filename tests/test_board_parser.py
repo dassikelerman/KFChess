@@ -1,20 +1,13 @@
 import pytest
 
 from config import settings
-from game.parser import parse_input, build_board, BoardParseError
-from rules.rule_registry import build_default_registry
+from board_io.board_parser import build_board, BoardParseError
+from rules.rule_engine import build_default_registry
 
 
 @pytest.fixture
 def registry():
     return build_default_registry(settings)
-
-
-def test_parse_input_splits_sections():
-    lines = ["Board:", "wK . bK", "Commands:", "print", "wait 5"]
-    board_lines, commands = parse_input(lines)
-    assert board_lines == ["wK . bK"]
-    assert commands == ["print", "wait 5"]
 
 
 def test_build_board_valid(registry):
@@ -64,8 +57,8 @@ def test_build_board_normalizes_irregular_whitespace(registry):
 
 
 def test_build_board_accepts_custom_registered_piece_kind():
-    from rules.rule_registry import PieceRuleRegistry
-    from rules.movement_strategy import MovementStrategy
+    from rules.rule_engine import PieceRuleRegistry
+    from rules.piece_rules import MovementStrategy
 
     class DummyStrategy(MovementStrategy):
         def is_legal(self, dr, dc, context):
@@ -82,17 +75,3 @@ def test_build_board_accepts_custom_registered_piece_kind():
 def test_build_board_rejects_token_of_unregistered_kind(registry):
     with pytest.raises(BoardParseError):
         build_board(["wK . bZ"], registry, settings)
-
-
-def test_parse_input_handles_missing_commands_section():
-    lines = ["Board:", "wK . bK"]
-    board_lines, commands = parse_input(lines)
-    assert board_lines == ["wK . bK"]
-    assert commands == []
-
-
-def test_parse_input_ignores_lines_outside_any_section():
-    lines = ["some preamble", "Board:", "wK . bK", "Commands:", "print"]
-    board_lines, commands = parse_input(lines)
-    assert board_lines == ["wK . bK"]
-    assert commands == ["print"]

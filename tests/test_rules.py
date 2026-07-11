@@ -1,8 +1,8 @@
 import pytest
 
-from board.text_board import TextBoardRepresentation
-from rules.movement_strategy import MoveContext
+from model.board import TextBoardRepresentation
 from rules.piece_rules import (
+    MoveContext,
     KingMovement, QueenMovement, RookMovement,
     BishopMovement, KnightMovement, PawnMovement,
 )

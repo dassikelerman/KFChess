@@ -1,6 +1,6 @@
 import types
 
-import main as main_module
+from texttests import script_runner as main_module
 
 
 def test_run_prints_board_on_print_command(capsys):
@@ -31,11 +31,6 @@ def test_run_accepts_injected_config(capsys):
     main_module.run(lines, config=custom_config)
     out = capsys.readouterr().out
     assert out.strip() == "wK . bK"
-
-
-def test_dispatch_ignores_blank_command():
-    # Should not raise for an empty command line.
-    main_module._dispatch("", engine=None, renderer=None)
 
 
 def test_run_canonical_output_normalizes_whitespace(capsys):

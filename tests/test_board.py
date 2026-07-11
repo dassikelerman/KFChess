@@ -1,4 +1,4 @@
-from board.text_board import TextBoardRepresentation
+from model.board import TextBoardRepresentation
 
 
 def make_board():

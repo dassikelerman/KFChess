@@ -1,11 +1,11 @@
 import pytest
 
 from config import settings
-from board.text_board import TextBoardRepresentation
-from rules.rule_registry import build_default_registry
-from rules.game_conditions import KingCaptureWinCondition, LastRankPromotion, WinCondition, PromotionRule
-from game.engine import GameEngine
-from game.renderer import BoardRenderer
+from model.board import TextBoardRepresentation
+from rules.rule_engine import build_default_registry
+from rules.rule_engine import KingCaptureWinCondition, LastRankPromotion, WinCondition, PromotionRule
+from engine.game_engine import GameEngine
+from board_io.board_printer import BoardRenderer
 
 
 class NeverEndsWinCondition(WinCondition):
@@ -629,3 +629,31 @@ def test_render_returns_current_board_text():
     engine, board = make_engine([["wK", "."], [".", "bK"]])
     text = engine.render(BoardRenderer())
     assert text == "wK .\n. bK"
+
+
+def test_clock_accumulates_across_waits():
+    engine, board = make_engine([["wK", "."], [".", "bK"]])
+    assert engine.clock == 0
+    engine.wait(100)
+    assert engine.clock == 100
+    engine.wait(50)
+    assert engine.clock == 150
+
+
+def test_jump_out_of_bounds_is_ignored():
+    engine, board = make_engine([["wK", "."], [".", "bK"]])
+    engine.handle_jump(-1, -1)
+    assert board.get(0, 0) == "wK"  # nothing changed, no crash
+
+
+def test_jump_after_game_over_is_ignored():
+    rows = [["wR", ".", "bK"], [".", ".", "."], [".", ".", "."]]
+    engine, board = make_engine(rows)
+    engine.handle_click(*cell_to_pixel(0, 0))
+    engine.handle_click(*cell_to_pixel(0, 2))
+    engine.wait(settings.MOVE_DURATION * 2)
+    assert engine.game_over is True
+
+    engine.handle_jump(*cell_to_pixel(0, 2))  # attempt to jump after the game has ended
+    engine.wait(settings.JUMP_DURATION)
+    assert board.get(0, 2) == "wR"  # untouched: the jump never took effect

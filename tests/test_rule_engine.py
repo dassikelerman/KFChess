@@ -1,8 +1,8 @@
 import pytest
 
 from config import settings
-from rules.rule_registry import PieceRuleRegistry, UnknownPieceKindError, build_default_registry
-from rules.movement_strategy import MovementStrategy
+from rules.rule_engine import PieceRuleRegistry, UnknownPieceKindError, build_default_registry
+from rules.piece_rules import MovementStrategy
 
 
 class DummyStrategy(MovementStrategy):

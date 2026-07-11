@@ -8,24 +8,32 @@ move.
 
 ```
 config/    settings.py            - all constants (timing, colors, pawn config)
-board/     board_interface.py     - abstract BoardRepresentation
-           text_board.py          - concrete text-token implementation
-rules/     movement_strategy.py   - MovementStrategy interface + MoveContext
-           piece_rules.py         - King/Queen/Rook/Bishop/Knight/Pawn strategies
-           rule_registry.py       - PieceRuleRegistry (Registry/Factory pattern)
-           game_conditions.py     - WinCondition / PromotionRule strategies
-game/      models.py              - Move / Jump value objects
-           parser.py              - input parsing + board construction
-           engine.py              - GameEngine (turn orchestration)
-           renderer.py            - board -> text rendering
+model/     board.py               - BoardRepresentation (abstract) + TextBoardRepresentation
+           piece.py, position.py, - reserved for future use (pieces/positions are
+           game_state.py            currently plain strings/tuples, not dedicated classes)
+rules/     piece_rules.py         - MovementStrategy interface, MoveContext,
+                                     King/Queen/Rook/Bishop/Knight/Pawn strategies
+           rule_engine.py         - PieceRuleRegistry (Registry/Factory pattern),
+                                     WinCondition / PromotionRule strategies
+realtime/  motion.py              - Move / Jump value objects
+           realtime_arbiter.py    - RealtimeArbiter (clock, in-flight motion resolution)
+engine/    game_engine.py         - GameEngine (turn orchestration)
+input/     board_mapper.py        - pixel -> board cell mapping
+           controller.py          - command string -> engine call dispatch
+board_io/  board_parser.py        - board-token parsing + board construction
+           board_printer.py       - board -> text rendering
+view/      renderer.py,           - reserved for future use (no graphical view exists
+           image_view.py            today; rendering is text-only, see board_io/)
+texttests/ script_parser.py       - splits raw input into board/commands sections
+           script_runner.py       - runs a parsed script end-to-end
 tests/     test_*.py              - unit tests (pytest)
-main.py    entry point + dependency wiring
+app.py     entry point + dependency wiring
 ```
 
 ## How the 4 requirements are addressed
 
 1. **Future binary representation** - all game logic talks only to the
-   `BoardRepresentation` interface (`board/board_interface.py`). The only
+   `BoardRepresentation` interface (`model/board.py`). The only
    concrete implementation today, `TextBoardRepresentation`, stores tokens
    like `"wK"`, but a future `BitboardRepresentation` could implement the
    same interface using integers internally without any other file
@@ -33,23 +41,27 @@ main.py    entry point + dependency wiring
 
 2. **No hardcoded rules** - each piece's movement is a `MovementStrategy`
    registered by letter in a `PieceRuleRegistry`
-   (`rules/rule_registry.py`). Registering a new kind (e.g. a custom
+   (`rules/rule_engine.py`). Registering a new kind (e.g. a custom
    "Champion" piece) automatically makes it a legal board token too, since
-   `game/parser.py` derives valid tokens from the registry instead of a
-   fixed string. Win conditions and promotion are likewise pluggable
-   strategies (`rules/game_conditions.py`).
+   `board_io/board_parser.py` derives valid tokens from the registry instead
+   of a fixed string. Win conditions and promotion are likewise pluggable
+   strategies (`rules/rule_engine.py`).
 
 3. **Clean code** - one responsibility per module/class (parsing, board
-   storage, movement rules, turn orchestration, rendering are all
-   separate); no duplicated logic (e.g. `path_is_clear` is shared by
-   Rook/Bishop/Queen); no magic numbers (all constants live in
-   `config/settings.py`); the board's internal list-of-lists storage is
-   private and only reachable through its public interface.
+   storage, movement rules, turn orchestration, real-time motion
+   resolution, rendering are all separate); no duplicated logic (e.g.
+   `path_is_clear` is shared by Rook/Bishop/Queen); no magic numbers (all
+   constants live in `config/settings.py`); the board's internal
+   list-of-lists storage is private and only reachable through its public
+   interface. `GameEngine` (`engine/game_engine.py`) is a thin orchestrator:
+   it delegates legality checks to the rule registry and all clock/motion
+   handling to `RealtimeArbiter` (`realtime/realtime_arbiter.py`).
 
-4. **Tests & DI** - `tests/` covers every module. `GameEngine` and `main.run`
-   take all collaborators (board, registry, win condition, promotion rule,
-   config) as constructor/function arguments, so tests substitute fakes
-   (see `tests/test_engine.py`) instead of monkeypatching.
+4. **Tests & DI** - `tests/` covers every module. `GameEngine` and
+   `texttests.script_runner.run` take all collaborators (board, registry,
+   win condition, promotion rule, config) as constructor/function
+   arguments, so tests substitute fakes (see `tests/test_engine.py`)
+   instead of monkeypatching.
 
 ## Known open item
 
@@ -70,4 +82,4 @@ pytest
 
 ## Repository
 
-`<insert-git-repository-url-here>` (see header comment in `main.py`)
+`<insert-git-repository-url-here>` (see header comment in `app.py`)

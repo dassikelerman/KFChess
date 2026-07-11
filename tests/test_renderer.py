@@ -1,5 +1,5 @@
-from board.text_board import TextBoardRepresentation
-from game.renderer import BoardRenderer
+from model.board import TextBoardRepresentation
+from board_io.board_printer import BoardRenderer
 
 
 def test_render_single_row():
