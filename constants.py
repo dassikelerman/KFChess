@@ -7,9 +7,11 @@ literal values themselves are written, so they don't have to be guessed
 inline in the middle of a function body.
 """
 
+from model.piece import PieceColor
+
 CELL_SIZE = 100
 MOVE_DURATION = 1000
 JUMP_DURATION = 1000
-COLORS = ("w", "b")
+COLORS = tuple(c.value for c in PieceColor)
 PAWN_DIRECTION = {"w": -1, "b": 1}
 EMPTY_CELL = "."

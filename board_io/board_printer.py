@@ -8,11 +8,12 @@ class BoardPrinter:
     talking to Board/GameEngine directly.
     """
 
-    EMPTY_TOKEN = "."
+    def __init__(self, empty_token="."):
+        self._empty_token = empty_token
 
     def render(self, snapshot):
         grid = [
-            [self.EMPTY_TOKEN] * snapshot.board_width for _ in range(snapshot.board_height)
+            [self._empty_token] * snapshot.board_width for _ in range(snapshot.board_height)
         ]
         for piece in snapshot.pieces:
             grid[piece.row][piece.col] = piece.color.value + kind_letter(piece.kind)

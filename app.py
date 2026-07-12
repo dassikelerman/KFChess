@@ -61,7 +61,7 @@ def run(input_lines):
         print("ERROR", error)
         return
 
-    printer = BoardPrinter()
+    printer = BoardPrinter(empty_token=constants.EMPTY_CELL)
     runner = ScriptRunner(app.controller, app.engine, printer)
     commands = parse_script(command_lines)
     runner.run(commands)
