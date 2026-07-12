@@ -45,18 +45,13 @@ class Piece:
 def parse_kind(letter):
     """Build a PieceKind from a one-character token letter.
 
-    Falls back to the raw letter for custom kinds registered directly with
-    a PieceRuleRegistry (e.g. "C" for a variant's "Champion" piece) - the
-    registry has always accepted arbitrary kind letters, so Board must be
-    able to hold pieces of a kind PieceKind doesn't know about.
+    Raises ValueError if the letter isn't one of PieceKind's members -
+    PieceKind is the single source of truth for every piece kind Board can
+    hold, so there's no fallback to a raw letter.
     """
-    try:
-        return PieceKind(letter)
-    except ValueError:
-        return letter
+    return PieceKind(letter)
 
 
 def kind_letter(kind):
-    """Inverse of parse_kind: the one-character token letter for a kind,
-    whether it's a standard PieceKind or a custom kind letter."""
-    return kind.value if isinstance(kind, PieceKind) else kind
+    """Inverse of parse_kind: the one-character token letter for a PieceKind."""
+    return kind.value

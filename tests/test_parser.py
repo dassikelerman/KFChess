@@ -80,7 +80,8 @@ def test_build_board_normalizes_irregular_whitespace(registry):
     assert get(board, 0, 2) == "bK"
 
 
-def test_build_board_accepts_custom_registered_piece_kind():
+def test_build_board_derives_valid_tokens_from_registered_kinds():
+    from model.piece import PieceKind
     from rules.rule_engine import PieceRuleRegistry
     from rules.piece_rules import MovementStrategy
 
@@ -88,12 +89,15 @@ def test_build_board_accepts_custom_registered_piece_kind():
         def is_legal(self, dr, dc, context):
             return True
 
-    custom_registry = PieceRuleRegistry()
-    custom_registry.register("C", DummyStrategy())
+    partial_registry = PieceRuleRegistry()
+    partial_registry.register(PieceKind.QUEEN, DummyStrategy())
 
-    board = build(["wC . bC"], custom_registry)
-    assert get(board, 0, 0) == "wC"
-    assert get(board, 0, 2) == "bC"
+    board = build(["wQ . bQ"], partial_registry)
+    assert get(board, 0, 0) == "wQ"
+    assert get(board, 0, 2) == "bQ"
+
+    with pytest.raises(BoardParseError):
+        build(["wQ . bK"], partial_registry)
 
 
 def test_build_board_rejects_token_of_unregistered_kind(registry):

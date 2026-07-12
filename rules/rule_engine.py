@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-from model.piece import kind_letter
 from rules.piece_rules import MoveContext
 
 
@@ -32,7 +31,7 @@ class RuleEngine:
         if target is not None and target.color == piece.color:
             return MoveValidation(False, "friendly_destination")
 
-        strategy = self._registry.get(kind_letter(piece.kind))
+        strategy = self._registry.get(piece.kind)
         dr = destination.row - source.row
         dc = destination.col - source.col
         context = MoveContext(
@@ -53,13 +52,12 @@ class UnknownPieceKindError(Exception):
 
 
 class PieceRuleRegistry:
-    """Maps a piece-kind letter to its MovementStrategy.
+    """Maps a PieceKind to its MovementStrategy.
 
-    This is the extension point required for custom games: registering a
-    new kind (e.g. "C" for a custom "Champion" piece) with its own
-    MovementStrategy is all that's needed to support it - no engine or
-    parser code has to change, and the piece automatically becomes a
-    valid board token (see board_io.board_parser).
+    This is the extension point for movement rules: registering a
+    PieceKind with its own MovementStrategy is all that's needed to
+    support it - no engine or parser code has to change, and the piece
+    automatically becomes a valid board token (see board_io.board_parser).
     """
 
     def __init__(self):
@@ -85,6 +83,7 @@ def build_default_registry(pawn_direction):
     (e.g. for a custom variant) can be assembled the same way without
     subclassing anything.
     """
+    from model.piece import PieceKind
     from rules.piece_rules import (
         KingMovement,
         QueenMovement,
@@ -95,10 +94,10 @@ def build_default_registry(pawn_direction):
     )
 
     registry = PieceRuleRegistry()
-    registry.register("K", KingMovement())
-    registry.register("Q", QueenMovement())
-    registry.register("R", RookMovement())
-    registry.register("B", BishopMovement())
-    registry.register("N", KnightMovement())
-    registry.register("P", PawnMovement(pawn_direction))
+    registry.register(PieceKind.KING, KingMovement())
+    registry.register(PieceKind.QUEEN, QueenMovement())
+    registry.register(PieceKind.ROOK, RookMovement())
+    registry.register(PieceKind.BISHOP, BishopMovement())
+    registry.register(PieceKind.KNIGHT, KnightMovement())
+    registry.register(PieceKind.PAWN, PawnMovement(pawn_direction))
     return registry

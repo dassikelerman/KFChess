@@ -41,7 +41,7 @@ class PieceSnapshot:
     directly."""
 
     id: str
-    kind: object  # PieceKind, or a raw custom-kind letter - see model.piece.parse_kind
+    kind: object  # PieceKind - see model.piece.parse_kind
     color: PieceColor
     state: PieceState
     row: int

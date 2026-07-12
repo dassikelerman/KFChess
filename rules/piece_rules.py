@@ -23,9 +23,9 @@ class MoveContext:
 class MovementStrategy(ABC):
     """A single piece kind's movement rule (Strategy pattern).
 
-    New piece kinds - including custom, non-standard ones - are supported
-    simply by implementing this interface and registering an instance with
-    a PieceRuleRegistry. No engine or parser code needs to change.
+    New movement rules for any PieceKind are supported simply by
+    implementing this interface and registering an instance with a
+    PieceRuleRegistry. No engine or parser code needs to change.
     """
 
     @abstractmethod
