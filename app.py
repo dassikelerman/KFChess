@@ -5,6 +5,7 @@ Repository: <insert-git-repository-url-here>
 import sys
 from dataclasses import dataclass
 
+import constants
 from rules.rule_engine import RuleEngine, build_default_registry
 from engine.game_conditions import KingCaptureWinCondition, LastRankPromotion
 from realtime.real_time_arbiter import RealTimeArbiter
@@ -30,8 +31,8 @@ def build_app(board_text):
     this function only builds and wires collaborators together, feeding
     each one the literal constants it needs directly.
     """
-    registry = build_default_registry(pawn_direction={"w": -1, "b": 1})
-    board = build_board(board_text, registry, colors=("w", "b"), empty_cell=".")
+    registry = build_default_registry(pawn_direction=constants.PAWN_DIRECTION)
+    board = build_board(board_text, registry, colors=constants.COLORS, empty_cell=constants.EMPTY_CELL)
 
     engine = GameEngine(
         board=board,
@@ -39,10 +40,12 @@ def build_app(board_text):
         arbiter=RealTimeArbiter(board),
         win_condition=KingCaptureWinCondition(),
         promotion_rule=LastRankPromotion(),
-        move_duration=1000,
-        jump_duration=1000,
+        move_duration=constants.MOVE_DURATION,
+        jump_duration=constants.JUMP_DURATION,
     )
-    board_mapper = BoardMapper(cell_size=100, board_width=board.width, board_height=board.height)
+    board_mapper = BoardMapper(
+        cell_size=constants.CELL_SIZE, board_width=board.width, board_height=board.height
+    )
     controller = Controller(engine, board_mapper)
 
     return AppComponents(engine=engine, controller=controller)
