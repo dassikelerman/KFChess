@@ -32,11 +32,6 @@ class RealTimeArbiter:
     def is_jumping_on(self, cell):
         return any(jump.cell == cell for jump in self._active_jumps)
 
-    def opposite_color_moving(self, color):
-        return any(
-            self._piece_color(motion.source) != color for motion in self._active_motions
-        )
-
     def start_motion(self, piece, source, destination, duration_ms):
         self._active_motions.append(Motion(piece.id, source, destination, duration_ms))
 
@@ -63,6 +58,14 @@ class RealTimeArbiter:
 
     def _resolve_arrival(self, motion):
         piece = self._board.piece_at(motion.source)
+        if piece is None or piece.id != motion.piece_id:
+            # The piece that queued this motion was already captured this
+            # same tick by another motion resolving first (e.g. a head-on
+            # swap, where this motion's source is the other motion's
+            # destination). That capture was already reported via the
+            # other motion's own ArrivalEvent, so this motion simply
+            # fizzles: nothing to move, nothing new to report.
+            return None
 
         if self._is_intercepted(motion, piece):
             self._board.remove_piece(piece)

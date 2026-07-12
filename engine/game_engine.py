@@ -74,9 +74,6 @@ class GameEngine:
             return MoveResult(False, validation.reason)
 
         piece = self._board.piece_at(source)
-        if self._arbiter.opposite_color_moving(piece.color):
-            return MoveResult(False, "opponent_in_flight")
-
         distance = max(abs(destination.row - source.row), abs(destination.col - source.col))
         duration_ms = self._move_duration * distance
         self._arbiter.start_motion(piece, source, destination, duration_ms)

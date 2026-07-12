@@ -587,37 +587,18 @@ def test_piece_moves_again_immediately_after_arrival_with_no_cooldown():
     assert is_empty(board, 0, 2)
 
 
-def test_cannot_queue_move_while_opposite_color_piece_is_in_flight():
+def test_opposite_color_moves_can_be_in_flight_simultaneously():
     rows = [["bR", ".", "."], [".", ".", "."], [".", ".", "wR"]]
     engine, controller, board = make_engine(rows)
     controller.click(*cell_to_pixel(0, 0))
-    controller.click(*cell_to_pixel(0, 2))  # black move queued, arrives at t=2000
+    controller.click(*cell_to_pixel(0, 2))  # black rook: (0,0) -> (0,2)
 
-    engine.wait(500)
-    controller.click(*cell_to_pixel(2, 2))  # select white rook
-    controller.click(*cell_to_pixel(2, 0))  # attempt: rejected, black still in flight
-
-    assert controller.selected == (2, 2)  # selection is preserved, not cleared
-    assert get(board, 2, 2) == "wR"
-    assert is_empty(board, 2, 0)
-
-
-def test_move_becomes_possible_once_opposite_color_move_settles():
-    rows = [["bR", ".", "."], [".", ".", "."], [".", ".", "wR"]]
-    engine, controller, board = make_engine(rows)
-    controller.click(*cell_to_pixel(0, 0))
-    controller.click(*cell_to_pixel(0, 2))  # black move queued, arrives at t=2000
-
-    engine.wait(500)
     controller.click(*cell_to_pixel(2, 2))
-    controller.click(*cell_to_pixel(2, 0))  # rejected, black still in flight
+    controller.click(*cell_to_pixel(2, 0))  # white rook: (2,2) -> (2,0), no gate blocks opposite color
 
-    engine.wait(1600)  # total clock 2100: black's move has now settled
-    controller.click(*cell_to_pixel(2, 0))  # re-attempt with the same selection
     engine.wait(MOVE_DURATION * 2)
-
+    assert get(board, 0, 2) == "bR"
     assert get(board, 2, 0) == "wR"
-    assert is_empty(board, 2, 2)
 
 
 def test_same_color_moves_can_be_in_flight_simultaneously():
