@@ -51,6 +51,12 @@ class UnknownPieceKindError(Exception):
     pass
 
 
+class IncompletePieceRuleRegistryError(Exception):
+    """Raised when a registry is missing a MovementStrategy for one or
+    more of the kinds it's expected to cover (see PieceRuleRegistry.ensure_covers)."""
+    pass
+
+
 class PieceRuleRegistry:
     """Maps a PieceKind to its MovementStrategy.
 
@@ -74,6 +80,15 @@ class PieceRuleRegistry:
 
     def registered_kinds(self):
         return tuple(self._strategies.keys())
+
+    def ensure_covers(self, kinds):
+        """Fail fast if any of `kinds` has no MovementStrategy registered,
+        rather than letting it surface later as an UnknownPieceKindError
+        when a move is attempted.
+        """
+        missing = [kind for kind in kinds if kind not in self._strategies]
+        if missing:
+            raise IncompletePieceRuleRegistryError(missing)
 
 
 def build_default_registry(pawn_direction):
@@ -100,4 +115,5 @@ def build_default_registry(pawn_direction):
     registry.register(PieceKind.BISHOP, BishopMovement())
     registry.register(PieceKind.KNIGHT, KnightMovement())
     registry.register(PieceKind.PAWN, PawnMovement(pawn_direction))
+    registry.ensure_covers(PieceKind)
     return registry

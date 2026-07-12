@@ -1,5 +1,5 @@
 from model.board import Board
-from model.piece import kind_letter
+from model.piece import PieceKind, kind_letter
 
 
 class BoardParseError(Exception):
@@ -24,20 +24,21 @@ def parse_input(lines):
     return board_lines, commands
 
 
-def _valid_tokens(registry, colors, empty_token):
-    """Valid tokens are derived from whatever piece kinds are registered,
-    rather than a hardcoded string - so registering a subset of piece
-    kinds automatically restricts accepted tokens here too.
+def _valid_tokens(colors, empty_token):
+    """Valid tokens are derived from PieceKind - the single source of
+    truth for every piece kind a (complete) PieceRuleRegistry covers -
+    rather than a hardcoded string.
     """
     tokens = {empty_token}
     for color in colors:
-        for kind in registry.registered_kinds():
+        for kind in PieceKind:
             tokens.add(color + kind_letter(kind))
     return tokens
 
 
 def build_board(lines, registry, colors, empty_cell):
-    valid_tokens = _valid_tokens(registry, colors, empty_cell)
+    registry.ensure_covers(PieceKind)
+    valid_tokens = _valid_tokens(colors, empty_cell)
     rows = []
     width = None
     for line in lines:

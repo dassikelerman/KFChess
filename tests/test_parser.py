@@ -1,9 +1,10 @@
 import pytest
 
 from board_io.board_parser import parse_input, build_board, BoardParseError
-from model.piece import kind_letter
+from model.piece import PieceKind, kind_letter
 from model.position import Position
-from rules.rule_engine import build_default_registry
+from rules.rule_engine import IncompletePieceRuleRegistryError, PieceRuleRegistry, build_default_registry
+from rules.piece_rules import MovementStrategy
 
 COLORS = ("w", "b")
 EMPTY_CELL = "."
@@ -80,11 +81,13 @@ def test_build_board_normalizes_irregular_whitespace(registry):
     assert get(board, 0, 2) == "bK"
 
 
-def test_build_board_derives_valid_tokens_from_registered_kinds():
-    from model.piece import PieceKind
-    from rules.rule_engine import PieceRuleRegistry
-    from rules.piece_rules import MovementStrategy
+def test_build_board_accepts_all_standard_piece_kinds(registry):
+    board = build(["wK wQ wR wB wN wP"], registry)
+    for col, letter in enumerate("KQRBNP"):
+        assert get(board, 0, col) == "w" + letter
 
+
+def test_build_board_rejects_incomplete_registry():
     class DummyStrategy(MovementStrategy):
         def is_legal(self, dr, dc, context):
             return True
@@ -92,12 +95,8 @@ def test_build_board_derives_valid_tokens_from_registered_kinds():
     partial_registry = PieceRuleRegistry()
     partial_registry.register(PieceKind.QUEEN, DummyStrategy())
 
-    board = build(["wQ . bQ"], partial_registry)
-    assert get(board, 0, 0) == "wQ"
-    assert get(board, 0, 2) == "bQ"
-
-    with pytest.raises(BoardParseError):
-        build(["wQ . bK"], partial_registry)
+    with pytest.raises(IncompletePieceRuleRegistryError):
+        build(["wQ . bQ"], partial_registry)
 
 
 def test_build_board_rejects_token_of_unregistered_kind(registry):
