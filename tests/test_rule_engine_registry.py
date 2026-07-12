@@ -1,6 +1,5 @@
 import pytest
 
-from config import settings
 from rules.rule_engine import PieceRuleRegistry, UnknownPieceKindError, build_default_registry
 from rules.piece_rules import MovementStrategy
 
@@ -30,6 +29,6 @@ def test_registered_kinds_reflects_custom_registration():
 
 
 def test_default_registry_has_standard_pieces():
-    registry = build_default_registry(settings)
+    registry = build_default_registry(pawn_direction={"w": -1, "b": 1})
     for kind in ("K", "Q", "R", "B", "N", "P"):
         assert kind in registry.registered_kinds()

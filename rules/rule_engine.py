@@ -1,4 +1,51 @@
-from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+from model.piece import kind_letter
+from rules.piece_rules import MoveContext
+
+
+@dataclass(frozen=True)
+class MoveValidation:
+    is_valid: bool
+    reason: str
+
+
+class RuleEngine:
+    """Decides whether a move from source to destination is legal, given
+    the current board state.
+
+    A stateless service: it only reads the board it's given and never
+    mutates anything or moves any piece. That keeps it independent of
+    GameEngine's own turn/timing state (selection, in-flight moves,
+    jumps), so it can be reused or tested on its own.
+    """
+
+    def __init__(self, rule_registry):
+        self._registry = rule_registry
+
+    def validate_move(self, board, source, destination):
+        piece = board.piece_at(source)
+        if piece is None:
+            return MoveValidation(False, "empty_source")
+
+        target = board.piece_at(destination)
+        if target is not None and target.color == piece.color:
+            return MoveValidation(False, "friendly_destination")
+
+        strategy = self._registry.get(kind_letter(piece.kind))
+        dr = destination.row - source.row
+        dc = destination.col - source.col
+        context = MoveContext(
+            board=board,
+            color=piece.color.value,
+            start=source,
+            end=destination,
+            target_occupied=target is not None,
+        )
+        if not strategy.is_legal(dr, dc, context):
+            return MoveValidation(False, "illegal_piece_move")
+
+        return MoveValidation(True, "ok")
 
 
 class UnknownPieceKindError(Exception):
@@ -12,7 +59,7 @@ class PieceRuleRegistry:
     new kind (e.g. "C" for a custom "Champion" piece) with its own
     MovementStrategy is all that's needed to support it - no engine or
     parser code has to change, and the piece automatically becomes a
-    valid board token (see game.parser).
+    valid board token (see board_io.board_parser).
     """
 
     def __init__(self):
@@ -31,7 +78,7 @@ class PieceRuleRegistry:
         return tuple(self._strategies.keys())
 
 
-def build_default_registry(config):
+def build_default_registry(pawn_direction):
     """Factory for the standard chess piece set.
 
     Kept separate from PieceRuleRegistry itself so alternate registries
@@ -53,46 +100,5 @@ def build_default_registry(config):
     registry.register("R", RookMovement())
     registry.register("B", BishopMovement())
     registry.register("N", KnightMovement())
-    registry.register("P", PawnMovement(config.PAWN_DIRECTION))
+    registry.register("P", PawnMovement(pawn_direction))
     return registry
-
-
-class WinCondition(ABC):
-    """Decides whether a capture ends the game (Strategy pattern).
-
-    Swappable so custom variants can define a different win condition
-    (e.g. capture-the-flag, last-piece-standing) without touching the
-    engine.
-    """
-
-    @abstractmethod
-    def is_game_over(self, captured_piece):
-        """captured_piece is the token that was just captured, or None."""
-
-
-class KingCaptureWinCondition(WinCondition):
-    def is_game_over(self, captured_piece):
-        return captured_piece is not None and captured_piece[1] == "K"
-
-
-class PromotionRule(ABC):
-    """Decides whether/how a piece transforms after moving (Strategy pattern)."""
-
-    @abstractmethod
-    def promote(self, piece, row, board_height):
-        """Return the (possibly unchanged) piece token after promotion rules apply."""
-
-
-class LastRankPromotion(PromotionRule):
-    def __init__(self, promotable_kind="P", promote_to="Q"):
-        self._promotable_kind = promotable_kind
-        self._promote_to = promote_to
-
-    def promote(self, piece, row, board_height):
-        color, kind = piece[0], piece[1]
-        if kind != self._promotable_kind:
-            return piece
-        last_rank = 0 if color == "w" else board_height - 1
-        if row == last_rank:
-            return color + self._promote_to
-        return piece

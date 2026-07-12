@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+from model.position import Position
+
 
 @dataclass(frozen=True)
 class MoveContext:
@@ -11,10 +13,10 @@ class MoveContext:
     changing every call site.
     """
 
-    board: object  # BoardRepresentation
+    board: object  # model.board.Board
     color: str
-    start: tuple
-    end: tuple
+    start: Position
+    end: Position
     target_occupied: bool
 
 
@@ -40,13 +42,13 @@ def path_is_clear(board, start, end):
     start and end is empty. Used by Rook, Bishop and Queen so the check is
     written once (DRY) instead of duplicated per piece.
     """
-    sr, sc = start
-    er, ec = end
+    sr, sc = start.row, start.col
+    er, ec = end.row, end.col
     dr = (er > sr) - (er < sr)
     dc = (ec > sc) - (ec < sc)
     r, c = sr + dr, sc + dc
     while (r, c) != (er, ec):
-        if not board.is_empty(r, c):
+        if board.piece_at(Position(r, c)) is not None:
             return False
         r += dr
         c += dc
@@ -97,8 +99,9 @@ class PawnMovement(MovementStrategy):
 
     A pawn's start row is derived from the board's own height rather than
     a fixed number, since boards in this game vary in size: a color's
-    start row is whichever edge it moves away from (row 0 if it advances
-    downward, the last row if it advances upward).
+    start row is one row in front of its back rank (row 1 if it advances
+    downward, one row short of the last row if it advances upward) - pawns
+    never start on the back rank itself, that's where the other pieces sit.
     """
 
     def __init__(self, directions):
@@ -106,15 +109,16 @@ class PawnMovement(MovementStrategy):
 
     def is_legal(self, dr, dc, context):
         direction = self._directions[context.color]
-        start_row = context.board.height - 1 if direction < 0 else 0
-        sr, _sc = context.start
+        back_rank = context.board.height - 1 if direction < 0 else 0
+        start_row = back_rank + direction
+        sr = context.start.row
 
         if dc == 0:
             if dr == direction and not context.target_occupied:
                 return True
             if sr == start_row and dr == 2 * direction and not context.target_occupied:
                 mid_row = sr + direction
-                return context.board.is_empty(mid_row, context.start[1])
+                return context.board.piece_at(Position(mid_row, context.start.col)) is None
             return False
 
         if abs(dc) == 1 and dr == direction and context.target_occupied:

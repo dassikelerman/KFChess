@@ -1,8 +1,26 @@
-from model.board import TextBoardRepresentation
+from model.board import Board
 
 
 class BoardParseError(Exception):
     pass
+
+
+def parse_input(lines):
+    """Split raw input lines into the 'Board:' and 'Commands:' sections."""
+    board_lines, commands = [], []
+    section = None
+    for line in lines:
+        if line == "Board:":
+            section = "board"
+            continue
+        if line == "Commands:":
+            section = "commands"
+            continue
+        if section == "board":
+            board_lines.append(line)
+        elif section == "commands":
+            commands.append(line)
+    return board_lines, commands
 
 
 def _valid_tokens(registry, colors, empty_token):
@@ -17,8 +35,8 @@ def _valid_tokens(registry, colors, empty_token):
     return tokens
 
 
-def build_board(lines, registry, config):
-    valid_tokens = _valid_tokens(registry, config.COLORS, config.EMPTY_CELL)
+def build_board(lines, registry, colors, empty_cell):
+    valid_tokens = _valid_tokens(registry, colors, empty_cell)
     rows = []
     width = None
     for line in lines:
@@ -33,4 +51,4 @@ def build_board(lines, registry, config):
             if token not in valid_tokens:
                 raise BoardParseError("UNKNOWN_TOKEN")
         rows.append(tokens)
-    return TextBoardRepresentation(rows, empty_token=config.EMPTY_CELL)
+    return Board(rows, empty_token=empty_cell)

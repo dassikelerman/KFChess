@@ -1,4 +1,4 @@
-from rules.rule_engine import KingCaptureWinCondition, LastRankPromotion
+from engine.game_conditions import KingCaptureWinCondition, LastRankPromotion
 
 
 def test_king_capture_ends_game():

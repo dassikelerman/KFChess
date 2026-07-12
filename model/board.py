@@ -1,64 +1,35 @@
-from abc import ABC, abstractmethod
+from dataclasses import replace
+
+from model.piece import Piece, PieceColor, PieceState, kind_letter, parse_kind
+from model.position import Position
 
 
-class BoardRepresentation(ABC):
-    """Abstraction over how board state is stored.
+class Board:
+    """Stores each cell as a typed Piece (or nothing), keyed by Position.
 
-    Game logic (rules, engine) only ever talks to this interface.
-    A concrete implementation may store cells as text tokens, packed
-    bitboards, or anything else, as long as it honors this contract.
-    That means a future binary/bitboard representation can be dropped in
-    without touching a single line of game logic.
+    Game logic talks to Piece/Position objects instead of "wK"/"." strings.
+    snapshot() still renders the same text tokens for callers that need them.
     """
 
-    @property
-    @abstractmethod
-    def width(self):
-        ...
-
-    @property
-    @abstractmethod
-    def height(self):
-        ...
-
-    @abstractmethod
-    def in_bounds(self, row, col):
-        ...
-
-    @abstractmethod
-    def get(self, row, col):
-        """Return the token/value occupying a cell."""
-
-    @abstractmethod
-    def set(self, row, col, value):
-        """Place a token/value on a cell."""
-
-    @abstractmethod
-    def is_empty(self, row, col):
-        ...
-
-    @abstractmethod
-    def snapshot(self):
-        """Return a read-only, text-token view of the board for rendering.
-
-        Even a binary implementation must be able to produce this view,
-        so rendering code never needs to know the internal storage format.
-        """
-
-
-class TextBoardRepresentation(BoardRepresentation):
-    """Stores each cell as a text token (e.g. 'wK', '.').
-
-    Internal storage (`_cells`) is a private implementation detail fully
-    encapsulated behind the BoardRepresentation interface. Nothing outside
-    this class ever touches `_cells` directly.
-    """
-
-    def __init__(self, rows, empty_token="."):
-        self._cells = [list(row) for row in rows]
+    def __init__(self, rows=(), empty_token="."):
+        self._height = len(rows)
+        self._width = len(rows[0]) if rows else 0
         self._empty_token = empty_token
-        self._height = len(self._cells)
-        self._width = len(self._cells[0]) if self._cells else 0
+        self._cells = {}
+        for row_index, row in enumerate(rows):
+            for col_index, token in enumerate(row):
+                if token == empty_token:
+                    continue
+                pos = Position(row_index, col_index)
+                self.add_piece(
+                    Piece(
+                        id=f"{token}@{row_index},{col_index}",
+                        color=PieceColor(token[0]),
+                        kind=parse_kind(token[1]),
+                        cell=pos,
+                        state=PieceState.IDLE,
+                    )
+                )
 
     @property
     def width(self):
@@ -68,17 +39,34 @@ class TextBoardRepresentation(BoardRepresentation):
     def height(self):
         return self._height
 
-    def in_bounds(self, row, col):
-        return 0 <= row < self._height and 0 <= col < self._width
+    def in_bounds(self, pos):
+        return 0 <= pos.row < self._height and 0 <= pos.col < self._width
 
-    def get(self, row, col):
-        return self._cells[row][col]
+    def piece_at(self, pos):
+        return self._cells.get(pos)
 
-    def set(self, row, col, value):
-        self._cells[row][col] = value
+    def add_piece(self, piece):
+        self._cells[piece.cell] = piece
 
-    def is_empty(self, row, col):
-        return self._cells[row][col] == self._empty_token
+    def remove_piece(self, piece_or_id):
+        if isinstance(piece_or_id, Piece):
+            self._cells.pop(piece_or_id.cell, None)
+            return
+        position = next(
+            (pos for pos, piece in self._cells.items() if piece.id == piece_or_id), None
+        )
+        if position is not None:
+            del self._cells[position]
+
+    def move_piece(self, piece, destination):
+        self.remove_piece(piece)
+        self.add_piece(replace(piece, cell=destination))
+
+    def pieces(self):
+        return list(self._cells.values())
 
     def snapshot(self):
-        return [row.copy() for row in self._cells]
+        grid = [[self._empty_token] * self._width for _ in range(self._height)]
+        for pos, piece in self._cells.items():
+            grid[pos.row][pos.col] = piece.color.value + kind_letter(piece.kind)
+        return grid

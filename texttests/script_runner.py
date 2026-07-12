@@ -1,34 +1,30 @@
-from config import settings
-from rules.rule_engine import build_default_registry, KingCaptureWinCondition, LastRankPromotion
-from board_io.board_parser import build_board, BoardParseError
-from texttests.script_parser import parse_input
-from engine.game_engine import GameEngine
-from board_io.board_printer import BoardRenderer
-from input.controller import _dispatch
+from texttests.script_parser import ClickCommand, JumpCommand, PrintBoardCommand, WaitCommand
 
 
-def run(input_lines, config=settings):
-    """Parse input and execute all commands. `config` is injectable so
-    tests (or custom variants) can supply alternate settings without
-    monkeypatching the settings module.
+class ScriptRunner:
+    """Executes parsed Command objects against exactly the public APIs a
+    real UI would use - Controller for clicks/jumps, GameEngine for
+    waiting/snapshotting, BoardPrinter for rendering. No other access to
+    engine internals, so a script run here exercises the same surface a
+    click-driven UI does.
     """
-    board_lines, commands = parse_input(input_lines)
-    registry = build_default_registry(config)
 
-    try:
-        board = build_board(board_lines, registry, config)
-    except BoardParseError as error:
-        print("ERROR", error)
-        return
+    def __init__(self, controller, game_engine, board_printer):
+        self._controller = controller
+        self._game_engine = game_engine
+        self._board_printer = board_printer
 
-    engine = GameEngine(
-        board=board,
-        rule_registry=registry,
-        win_condition=KingCaptureWinCondition(),
-        promotion_rule=LastRankPromotion(),
-        config=config,
-    )
-    renderer = BoardRenderer()
+    def run(self, commands):
+        for command in commands:
+            self._execute(command)
 
-    for command in commands:
-        _dispatch(command, engine, renderer)
+    def _execute(self, command):
+        if isinstance(command, ClickCommand):
+            self._controller.click(command.x, command.y)
+        elif isinstance(command, JumpCommand):
+            self._controller.jump(command.x, command.y)
+        elif isinstance(command, WaitCommand):
+            self._game_engine.wait(command.ms)
+        elif isinstance(command, PrintBoardCommand):
+            self._game_engine.wait(0)  # resolve anything due before rendering
+            print(self._board_printer.render(self._game_engine.snapshot()))

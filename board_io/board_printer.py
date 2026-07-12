@@ -1,9 +1,19 @@
-class BoardRenderer:
-    """Turns a BoardRepresentation snapshot into printable text.
+from model.piece import kind_letter
 
-    Kept separate from GameEngine so rendering format can change (or the
-    engine can be tested) without either one depending on the other.
+
+class BoardPrinter:
+    """Turns a GameSnapshot into printable text - the same text format
+    the board's own token grid always produced ("wK"/"." rows joined by
+    spaces/newlines), just built from PieceSnapshot data instead of
+    talking to Board/GameEngine directly.
     """
 
-    def render(self, board):
-        return "\n".join(" ".join(row) for row in board.snapshot())
+    EMPTY_TOKEN = "."
+
+    def render(self, snapshot):
+        grid = [
+            [self.EMPTY_TOKEN] * snapshot.board_width for _ in range(snapshot.board_height)
+        ]
+        for piece in snapshot.pieces:
+            grid[piece.row][piece.col] = piece.color.value + kind_letter(piece.kind)
+        return "\n".join(" ".join(row) for row in grid)
