@@ -56,5 +56,4 @@ class GameSnapshot:
     board_width: int
     board_height: int
     pieces: List[PieceSnapshot]
-    selected_cell: Optional[Position]
     game_over: bool

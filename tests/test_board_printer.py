@@ -19,7 +19,6 @@ def snapshot(width, height, pieces):
         board_width=width,
         board_height=height,
         pieces=pieces,
-        selected_cell=None,
         game_over=False,
     )
 

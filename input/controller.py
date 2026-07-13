@@ -11,6 +11,7 @@ class Controller:
         self._game_engine = game_engine
         self._board_mapper = board_mapper
         self._selected = None
+        self._selected_piece_id = None
 
     @property
     def selected(self):
@@ -36,6 +37,7 @@ class Controller:
     def jump(self, x, y):
         self._game_engine.wait(0)
         self._selected = None
+        self._selected_piece_id = None
         if self._game_engine.game_over:
             return
 
@@ -51,21 +53,31 @@ class Controller:
         if self._is_busy(pos):
             return None
         piece = self._game_engine.board.piece_at(pos)
-        return pos if piece is not None else None
+        if piece is None:
+            return None
+        self._selected_piece_id = piece.id
+        return pos
 
     def _act_on_selection(self, pos):
         start = self._selected
         board = self._game_engine.board
         piece = board.piece_at(start)
 
-        if piece is None or self._is_busy(start):
+        # The piece originally selected may have been captured (and the
+        # cell taken by a different piece) while it sat waiting for a
+        # second click - e.g. an enemy motion or jump resolving on `start`
+        # in between. Position alone can't tell them apart, so confirm
+        # identity the same way RealTimeArbiter._resolve_arrival does.
+        if piece is None or piece.id != self._selected_piece_id or self._is_busy(start):
             self._selected = None
+            self._selected_piece_id = None
             return
 
         target = board.piece_at(pos)
         if target is not None and target.color == piece.color:
             if not self._is_busy(pos):
                 self._selected = pos
+                self._selected_piece_id = target.id
             return
 
         result = self._game_engine.request_move(start, pos)
@@ -73,6 +85,7 @@ class Controller:
             return  # illegal target: keep current selection
 
         self._selected = None
+        self._selected_piece_id = None
 
     def _is_busy(self, pos):
         return self._game_engine.is_position_busy(pos)

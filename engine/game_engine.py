@@ -112,7 +112,6 @@ class GameEngine:
             board_width=self._board.width,
             board_height=self._board.height,
             pieces=pieces,
-            selected_cell=None,
             game_over=self._game_over,
         )
 
