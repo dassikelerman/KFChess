@@ -33,25 +33,39 @@ class RealTimeArbiter:
         return any(jump.cell == cell for jump in self._active_jumps)
 
     def start_motion(self, piece, source, destination, duration_ms):
-        self._active_motions.append(Motion(piece.id, source, destination, duration_ms))
+        start_time = self._clock
+        arrival_time = self._clock + duration_ms
+        self._active_motions.append(Motion(piece.id, source, destination, start_time, arrival_time))
 
     def start_jump(self, cell, end_time):
         self._active_jumps.append(Jump(cell, end_time))
 
     def advance_time(self, ms):
-        self._clock += ms
-        for motion in self._active_motions:
-            motion.advance(ms)
+        
+        if ms < 0:
+            raise ValueError(f"advance_time expects a non-negative duration, got {ms}")
 
-        remaining = []
+        self._clock += ms
+
+        overdue = [m for m in self._active_motions if m.is_complete_at(self._clock)]
+        remaining = [m for m in self._active_motions if not m.is_complete_at(self._clock)]
+
+        # Resolve strictly by arrival time, not by insertion order into
+        # _active_motions - a motion queued later can still have the
+        # earlier arrival_time (e.g. a short move queued after a long
+        # one), and both must land in real arrival order. sort() is
+        # stable, so motions that tie on arrival_time keep their
+        # relative insertion order; that's a deliberate, documented
+        # fallback rather than a resolved game rule - simultaneous
+        # arrivals still need an explicit policy if that ever matters.
+        overdue.sort(key=lambda motion: motion.arrival_time)
+
         events = []
-        for motion in self._active_motions:
-            if not motion.is_complete:
-                remaining.append(motion)
-                continue
+        for motion in overdue:
             event = self._resolve_arrival(motion)
             if event is not None:
                 events.append(event)
+
         self._active_motions = remaining
         self._active_jumps = [j for j in self._active_jumps if self._clock < j.end_time]
         return events

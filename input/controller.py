@@ -20,7 +20,6 @@ class Controller:
         return (self._selected.row, self._selected.col)
 
     def click(self, x, y):
-        self._game_engine.wait(0)  # resolve any arrivals due before acting on this click
         if self._game_engine.game_over:
             return
 
@@ -35,7 +34,6 @@ class Controller:
         self._act_on_selection(pos)
 
     def jump(self, x, y):
-        self._game_engine.wait(0)
         self._selected = None
         self._selected_piece_id = None
         if self._game_engine.game_over:

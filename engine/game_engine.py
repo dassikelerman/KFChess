@@ -33,6 +33,11 @@ class GameEngine:
     def __init__(
         self, board, rule_engine, arbiter, win_condition, promotion_rule, move_duration, jump_duration
     ):
+        if move_duration <= 0:
+            raise ValueError("move_duration must be positive")
+        if jump_duration <= 0:
+            raise ValueError("jump_duration must be positive")
+
         self._board = board
         self._rule_engine = rule_engine
         self._arbiter = arbiter

@@ -38,7 +38,13 @@ class NoPromotion(PromotionRule):
         return piece
 
 
-def make_engine(rows, win_condition=None, promotion_rule=None):
+def make_engine(
+    rows,
+    win_condition=None,
+    promotion_rule=None,
+    move_duration=MOVE_DURATION,
+    jump_duration=JUMP_DURATION,
+):
     board = Board(rows)
     registry = build_default_registry(pawn_direction={"w": -1, "b": 1})
     engine = GameEngine(
@@ -47,8 +53,8 @@ def make_engine(rows, win_condition=None, promotion_rule=None):
         arbiter=RealTimeArbiter(board),
         win_condition=win_condition or KingCaptureWinCondition(),
         promotion_rule=promotion_rule or LastRankPromotion(),
-        move_duration=MOVE_DURATION,
-        jump_duration=JUMP_DURATION,
+        move_duration=move_duration,
+        jump_duration=jump_duration,
     )
     board_mapper = BoardMapper(CELL_SIZE, board.width, board.height)
     controller = Controller(engine, board_mapper)
@@ -667,3 +673,106 @@ def test_render_returns_current_board_text():
     engine.wait(0)
     text = BoardPrinter().render(engine.snapshot())
     assert text == "wK .\n. bK"
+
+
+# -- wait(0): GameEngine.wait(0)/RealTimeArbiter.advance_time(0) never
+# advances the clock, but can still resolve a motion/jump that's already
+# due. Controller.click()/jump() used to call wait(0) defensively before
+# acting, because GameEngine.__init__ once accepted a move_duration/
+# jump_duration of 0, under which a motion could be immediately due the
+# instant it was queued. Now that construction rejects non-positive
+# durations (see test_construction_rejects_* below), a validated move
+# always covers distance >= 1 and jump_duration is always positive, so a
+# motion/jump can never be due the instant it's created; combined with
+# RealTimeArbiter.advance_time() always fully draining whatever's overdue
+# before it returns, nothing can ever be sitting "already due but
+# unresolved" when Controller.click()/jump() runs. That made the wait(0)
+# calls there unconditionally redundant, so they were removed. The tests
+# below cover wait(0)/advance_time(0) as general GameEngine/RealTimeArbiter
+# behaviour (still relevant - e.g. ScriptRunner calls wait(0) before
+# rendering), and test_wait_zero_is_always_a_noop_for_a_real_motion proves
+# the specific invariant that justified the removal.
+
+
+def test_wait_zero_does_not_advance_clock():
+    engine, controller, board = make_engine([["wK", "."], [".", "."]])
+    engine.wait(500)
+    clock_before = engine.clock
+    engine.wait(0)
+    assert engine.clock == clock_before
+
+
+def test_wait_zero_is_noop_when_nothing_pending():
+    engine, controller, board = make_engine([["wR", ".", "."]])
+    events = engine.arbiter.advance_time(0)
+    assert events == []
+    assert engine.arbiter.clock == 0
+    assert get(board, 0, 0) == "wR"
+
+
+def test_wait_zero_is_always_a_noop_for_a_real_motion():
+    # Because GameEngine now guarantees move_duration/jump_duration > 0
+    # (test_construction_rejects_* below), a queued motion's arrival_time
+    # is always strictly in the future relative to the clock at queue
+    # time - it can never be immediately due. wait(0) right after queuing
+    # therefore resolves nothing, and wait(0) right after the motion has
+    # already landed (via a real wait()) also resolves nothing further,
+    # since advance_time() always fully drains what's overdue on its own.
+    # This is the invariant that made Controller.click()/jump()'s wait(0)
+    # calls unconditionally redundant.
+    engine, controller, board = make_engine([["wR", ".", "."]])
+    controller.click(*cell_to_pixel(0, 0))
+    controller.click(*cell_to_pixel(0, 2))  # queue a real, positive-duration move
+
+    assert engine.arbiter.advance_time(0) == []  # not due yet - can't be
+
+    engine.wait(MOVE_DURATION * 2)  # let it land normally
+    assert engine.arbiter.advance_time(0) == []  # already resolved, nothing left
+
+
+def test_stale_selection_after_capture_is_not_acted_on():
+    # The selected piece can be captured - and its cell taken by a
+    # different piece - while it sits waiting for a second click. This
+    # exercises that scenario through pure Controller clicks (both colors
+    # driven by the same Controller, as other tests here already do).
+    rows = [["wQ", ".", "."], [".", ".", "."], ["bR", ".", "."]]
+    engine, controller, board = make_engine(rows)
+
+    controller.click(*cell_to_pixel(2, 0))  # select bR
+    controller.click(*cell_to_pixel(0, 0))  # queue bR: (2,0) -> (0,0)
+    assert controller.selected is None
+
+    controller.click(*cell_to_pixel(0, 0))  # select wQ, still sitting there
+    assert controller.selected == (0, 0)
+
+    engine.wait(MOVE_DURATION * 2)  # bR arrives, capturing wQ
+    assert get(board, 0, 0) == "bR"
+
+    controller.click(*cell_to_pixel(0, 1))  # attempt to move the (now-gone) wQ
+    assert controller.selected is None  # stale selection discarded, not acted on
+    assert get(board, 0, 0) == "bR"  # bR untouched
+    assert get(board, 0, 1) == "."
+
+
+def test_construction_accepts_positive_durations():
+    make_engine([["wK", "."], [".", "."]], move_duration=1000, jump_duration=1000)
+
+
+def test_construction_rejects_zero_move_duration():
+    with pytest.raises(ValueError):
+        make_engine([["wK", "."], [".", "."]], move_duration=0, jump_duration=1000)
+
+
+def test_construction_rejects_negative_move_duration():
+    with pytest.raises(ValueError):
+        make_engine([["wK", "."], [".", "."]], move_duration=-1, jump_duration=1000)
+
+
+def test_construction_rejects_zero_jump_duration():
+    with pytest.raises(ValueError):
+        make_engine([["wK", "."], [".", "."]], move_duration=1000, jump_duration=0)
+
+
+def test_construction_rejects_negative_jump_duration():
+    with pytest.raises(ValueError):
+        make_engine([["wK", "."], [".", "."]], move_duration=1000, jump_duration=-100)
