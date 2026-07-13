@@ -1,10 +1,8 @@
 import pytest
 
 from board_io.board_parser import parse_input, build_board, BoardParseError
-from model.piece import PieceKind, kind_letter
+from model.piece import kind_letter
 from model.position import Position
-from rules.rule_engine import IncompletePieceRuleRegistryError, PieceRuleRegistry, build_default_registry
-from rules.piece_rules import MovementStrategy
 
 COLORS = ("w", "b")
 EMPTY_CELL = "."
@@ -19,13 +17,8 @@ def is_empty(board, row, col):
     return board.piece_at(Position(row, col)) is None
 
 
-def build(lines, registry):
-    return build_board(lines, registry, colors=COLORS, empty_cell=EMPTY_CELL)
-
-
-@pytest.fixture
-def registry():
-    return build_default_registry(pawn_direction={"w": -1, "b": 1})
+def build(lines):
+    return build_board(lines, colors=COLORS, empty_cell=EMPTY_CELL)
 
 
 def test_parse_input_splits_sections():
@@ -35,73 +28,61 @@ def test_parse_input_splits_sections():
     assert commands == ["print", "wait 5"]
 
 
-def test_build_board_valid(registry):
-    board = build(["wK . bK"], registry)
+def test_build_board_valid():
+    board = build(["wK . bK"])
     assert get(board, 0, 0) == "wK"
     assert is_empty(board, 0, 1)
 
 
-def test_build_board_rejects_unknown_token(registry):
+def test_build_board_rejects_unknown_token():
     with pytest.raises(BoardParseError):
-        build(["wX . bK"], registry)
+        build(["wX . bK"])
 
 
-def test_build_board_rejects_row_width_mismatch(registry):
+def test_build_board_rejects_row_width_mismatch():
     with pytest.raises(BoardParseError):
-        build(["wK . bK", "wK ."], registry)
+        build(["wK . bK", "wK ."])
 
 
-def test_build_board_skips_blank_lines(registry):
-    board = build(["wK . bK", "", "  "], registry)
+def test_build_board_skips_blank_lines():
+    board = build(["wK . bK", "", "  "])
     assert board.height == 1
 
 
-def test_build_board_infers_dimensions_for_multiple_rows(registry):
-    board = build(["wK . bK", ". . ."], registry)
+def test_build_board_infers_dimensions_for_multiple_rows():
+    board = build(["wK . bK", ". . ."])
     assert board.width == 3
     assert board.height == 2
 
 
-def test_build_board_all_blank_lines_yields_empty_board(registry):
-    board = build(["", "   ", ""], registry)
+def test_build_board_all_blank_lines_yields_empty_board():
+    board = build(["", "   ", ""])
     assert board.width == 0
     assert board.height == 0
 
 
-def test_build_board_no_lines_yields_empty_board(registry):
-    board = build([], registry)
+def test_build_board_no_lines_yields_empty_board():
+    board = build([])
     assert board.width == 0
     assert board.height == 0
 
 
-def test_build_board_normalizes_irregular_whitespace(registry):
-    board = build(["wK   .\tbK"], registry)
+def test_build_board_normalizes_irregular_whitespace():
+    board = build(["wK   .\tbK"])
     assert board.width == 3
     assert get(board, 0, 0) == "wK"
     assert get(board, 0, 2) == "bK"
 
 
-def test_build_board_accepts_all_standard_piece_kinds(registry):
-    board = build(["wK wQ wR wB wN wP"], registry)
+def test_build_board_accepts_all_standard_piece_kinds():
+    board = build(["wK wQ wR wB wN wP"])
     for col, letter in enumerate("KQRBNP"):
         assert get(board, 0, col) == "w" + letter
 
 
-def test_build_board_rejects_incomplete_registry():
-    class DummyStrategy(MovementStrategy):
-        def is_legal(self, dr, dc, context):
-            return True
-
-    partial_registry = PieceRuleRegistry()
-    partial_registry.register(PieceKind.QUEEN, DummyStrategy())
-
-    with pytest.raises(IncompletePieceRuleRegistryError):
-        build(["wQ . bQ"], partial_registry)
-
-
-def test_build_board_rejects_token_of_unregistered_kind(registry):
+def test_build_board_rejects_token_of_unregistered_kind():
     with pytest.raises(BoardParseError):
-        build(["wK . bZ"], registry)
+        build(["wK . bZ"])
 
 
 def test_parse_input_handles_missing_commands_section():

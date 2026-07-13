@@ -26,8 +26,8 @@ def parse_input(lines):
 
 def _valid_tokens(colors, empty_token):
     """Valid tokens are derived from PieceKind - the single source of
-    truth for every piece kind a (complete) PieceRuleRegistry covers -
-    rather than a hardcoded string.
+    truth for every piece kind a board token can represent - rather than
+    a hardcoded string.
     """
     tokens = {empty_token}
     for color in colors:
@@ -36,8 +36,7 @@ def _valid_tokens(colors, empty_token):
     return tokens
 
 
-def build_board(lines, registry, colors, empty_cell):
-    registry.ensure_covers(PieceKind)
+def build_board(lines, colors, empty_cell):
     valid_tokens = _valid_tokens(colors, empty_cell)
     rows = []
     width = None

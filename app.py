@@ -32,7 +32,7 @@ def build_app(board_text):
     each one the literal constants it needs directly.
     """
     registry = build_default_registry(pawn_direction=constants.PAWN_DIRECTION)
-    board = build_board(board_text, registry, colors=constants.COLORS, empty_cell=constants.EMPTY_CELL)
+    board = build_board(board_text, colors=constants.COLORS, empty_cell=constants.EMPTY_CELL)
 
     engine = GameEngine(
         board=board,
