@@ -35,8 +35,8 @@ class RealTimeArbiter:
     def start_motion(self, piece, source, destination, duration_ms):
         self._active_motions.append(Motion(piece.id, source, destination, duration_ms))
 
-    def start_jump(self, piece, cell, end_time):
-        self._active_jumps.append(Jump(piece.id, cell, end_time))
+    def start_jump(self, cell, end_time):
+        self._active_jumps.append(Jump(cell, end_time))
 
     def advance_time(self, ms):
         self._clock += ms

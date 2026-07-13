@@ -35,6 +35,5 @@ class Motion:
 class Jump:
     """An active jump/interception window guarding a cell until end_time."""
 
-    piece_id: str
     cell: Position
     end_time: int

@@ -53,7 +53,7 @@ class Controller:
 
         arbiter = self._game_engine.arbiter
         end_time = arbiter.clock + self._game_engine.jump_duration
-        arbiter.start_jump(piece, pos, end_time)
+        arbiter.start_jump(pos, end_time)
 
     # -- internal helpers -------------------------------------------------
 
