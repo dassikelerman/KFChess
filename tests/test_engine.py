@@ -497,6 +497,38 @@ def test_king_intercepted_by_jump_ends_the_game():
     assert is_empty(board, 0, 0)
 
 
+def test_request_jump_directly_starts_a_jump():
+    engine, controller, board = make_engine([["wR", "bP"], [".", "."]])
+    engine.request_jump(Position(0, 0))
+    assert engine.is_position_busy(Position(0, 0)) is True
+
+
+def test_request_jump_on_empty_cell_is_ignored():
+    engine, controller, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.request_jump(Position(0, 1))
+    assert engine.is_position_busy(Position(0, 1)) is False
+
+
+def test_request_jump_on_busy_cell_is_ignored():
+    engine, controller, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
+    engine.request_move(Position(0, 0), Position(0, 2))  # rook now mid-move, (0, 0) is busy
+
+    engine.request_jump(Position(0, 0))
+    engine.wait(JUMP_DURATION)
+
+    # nothing intercepts the rook's own move; it lands normally
+    engine.wait(MOVE_DURATION * 2)
+    assert get(board, 0, 2) == "wR"
+
+
+def test_is_position_busy_reflects_active_motion():
+    engine, controller, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
+    assert engine.is_position_busy(Position(0, 0)) is False
+
+    engine.request_move(Position(0, 0), Position(0, 2))
+    assert engine.is_position_busy(Position(0, 0)) is True
+
+
 def test_pawn_promotion_on_arrival():
     # white pawn one step from the last rank (row 0)
     rows = [[".", ".", "."], ["wP", ".", "."], [".", ".", "."]]

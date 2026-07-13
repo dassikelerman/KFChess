@@ -79,6 +79,20 @@ class GameEngine:
         self._arbiter.start_motion(piece, source, destination, duration_ms)
         return MoveResult(True, "ok")
 
+    def is_position_busy(self, position):
+        return self._arbiter.has_active_motion(position) or self._arbiter.is_jumping_on(position)
+
+    def request_jump(self, position):
+        if self.is_position_busy(position):
+            return
+
+        piece = self._board.piece_at(position)
+        if piece is None:
+            return
+
+        end_time = self._arbiter.clock + self._jump_duration
+        self._arbiter.start_jump(position, end_time)
+
     def wait(self, dt):
         self._advance(dt)
 

@@ -2,10 +2,9 @@ class Controller:
     """Turns raw pixel clicks into board actions.
 
     Tracks which cell is currently selected across a click pair, and asks
-    the GameEngine to judge/execute the resulting move via
-    request_move(). GameEngine itself never sees a pixel - only Position.
-    A jump is still a UI-click decision, so it's queued straight onto the
-    arbiter here, without routing through GameEngine at all.
+    the GameEngine to judge/execute the resulting move or jump via
+    request_move()/request_jump(). GameEngine itself never sees a pixel -
+    only Position.
     """
 
     def __init__(self, game_engine, board_mapper):
@@ -44,16 +43,7 @@ class Controller:
         if pos is None:
             return
 
-        if self._is_busy(pos):
-            return
-
-        piece = self._game_engine.board.piece_at(pos)
-        if piece is None:
-            return
-
-        arbiter = self._game_engine.arbiter
-        end_time = arbiter.clock + self._game_engine.jump_duration
-        arbiter.start_jump(pos, end_time)
+        self._game_engine.request_jump(pos)
 
     # -- internal helpers -------------------------------------------------
 
@@ -85,5 +75,4 @@ class Controller:
         self._selected = None
 
     def _is_busy(self, pos):
-        arbiter = self._game_engine.arbiter
-        return arbiter.has_active_motion(pos) or arbiter.is_jumping_on(pos)
+        return self._game_engine.is_position_busy(pos)
