@@ -135,7 +135,13 @@ class GameEngine:
                 continue  # the arriving piece was intercepted: nothing landed to promote
 
             moved = self._board.piece_at(event.destination)
-            if moved is None:
+            if moved is None or moved.id != event.piece_id:
+                # event.destination was overwritten by a later event in this
+                # same batch (e.g. another motion capturing the same cell)
+                # before this event was processed - the piece this event
+                # actually reports on is already gone, so there's nothing of
+                # its own left to promote. The event that truly landed there
+                # gets its own correctly-attributed pass through this loop.
                 continue
             promoted_token = self._promotion_rule.promote(
                 _token(moved), event.destination.row, self._board.height

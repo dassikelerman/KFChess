@@ -38,6 +38,20 @@ class NoPromotion(PromotionRule):
         return piece
 
 
+class SpyPromotionRule(LastRankPromotion):
+    """Wraps the real promotion rule but logs every (token, row) it was
+    called with, so tests can assert not just the outcome but how many
+    times - and for which piece - promotion was actually evaluated."""
+
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    def promote(self, piece, row, board_height):
+        self.calls.append((piece, row))
+        return super().promote(piece, row, board_height)
+
+
 def make_engine(
     rows,
     win_condition=None,
@@ -582,6 +596,34 @@ def test_injected_promotion_rule_overrides_default_behaviour():
     engine.wait(MOVE_DURATION)
 
     assert get(board, 0, 0) == "wP"
+
+
+def test_promote_called_once_for_the_piece_that_actually_landed():
+    # Two enemy motions converge on the same destination within a single
+    # advance_time() batch: wR (2,0)->(0,0) is queued first and lands on
+    # an empty cell (no capture); bN (2,1)->(0,0) is a legal knight move
+    # queued second, same arrival time, and captures wR the instant it
+    # lands. Before the fix, _apply_events() re-derived "the piece that
+    # arrived" via board.piece_at(event.destination) for *each* event, so
+    # wR's own event - now stale, since bN already overwrote that cell -
+    # would incorrectly read bN off the board and call promote() on it a
+    # second time, misattributed to wR's event. The identity guard in
+    # _apply_events (moved.id != event.piece_id) closes that: only the
+    # event whose own piece truly ended up at the destination triggers a
+    # promotion check.
+    rows = [[".", ".", "."], [".", ".", "."], ["wR", "bN", "."]]
+    spy = SpyPromotionRule()
+    engine, controller, board = make_engine(rows, promotion_rule=spy)
+
+    controller.click(*cell_to_pixel(2, 0))
+    controller.click(*cell_to_pixel(0, 0))  # wR queued first: (2,0) -> (0,0)
+    controller.click(*cell_to_pixel(2, 1))
+    controller.click(*cell_to_pixel(0, 0))  # bN queued second, same destination
+
+    engine.wait(MOVE_DURATION * 2)  # both arrive on the same tick; bN captures wR
+
+    assert get(board, 0, 0) == "bN"
+    assert spy.calls == [("bN", 0)]  # exactly one call, for the piece that truly landed
 
 
 def test_cannot_select_a_piece_that_is_mid_move():
