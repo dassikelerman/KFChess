@@ -91,6 +91,10 @@ class GameEngine:
         return self._arbiter.has_active_motion(position) or self._arbiter.is_jumping_on(position)
 
     def request_jump(self, position):
+        
+        if self._game_over:
+            return MoveResult(False, "game_over")
+        
         if self.is_position_busy(position):
             return
 
@@ -157,6 +161,7 @@ class GameEngine:
         for event in events:
             if self._win_condition.is_game_over(_captured_token(event)):
                 self._game_over = True
+                return 
 
             if event.captured_piece_id == event.piece_id:
                 continue  # the arriving piece was intercepted: nothing landed to promote

@@ -62,15 +62,8 @@ class Piece:
 
 
 def parse_kind(letter):
-    """Build a PieceKind from a one-character token letter.
-
-    Raises ValueError if the letter isn't one of PieceKind's members -
-    PieceKind is the single source of truth for every piece kind Board can
-    hold, so there's no fallback to a raw letter.
-    """
     return PieceKind(letter)
 
 
 def kind_letter(kind):
-    """Inverse of parse_kind: the one-character token letter for a PieceKind."""
     return kind.value
