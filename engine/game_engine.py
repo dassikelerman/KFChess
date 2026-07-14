@@ -74,6 +74,9 @@ class GameEngine:
         if self._arbiter.has_active_motion(source):
             return MoveResult(False, "motion_in_progress")
 
+        if self._arbiter.is_jumping_on(source):
+            return MoveResult(False, "jump_in_progress")
+
         validation = self._rule_engine.validate_move(self._board, source, destination)
         if not validation.is_valid:
             return MoveResult(False, validation.reason)

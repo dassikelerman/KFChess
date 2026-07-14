@@ -27,7 +27,20 @@ class RealTimeArbiter:
     def has_active_motion(self, cell=None):
         if cell is None:
             return bool(self._active_motions)
-        return any(motion.source == cell for motion in self._active_motions)
+        return any(
+            motion.source == cell and self._motion_piece_still_there(motion)
+            for motion in self._active_motions
+        )
+
+    def _motion_piece_still_there(self, motion):
+        # A motion queued from `cell` can be left stale if the piece that
+        # queued it was captured on that very cell by another motion's
+        # arrival in the meantime (e.g. an enemy motion whose destination
+        # is this motion's still-pending source) - the cell it "blocks"
+        # may now hold a different, perfectly idle piece. Same identity
+        # check _resolve_arrival() already relies on.
+        piece = self._board.piece_at(motion.source)
+        return piece is not None and piece.id == motion.piece_id
 
     def is_jumping_on(self, cell):
         return any(jump.cell == cell for jump in self._active_jumps)
@@ -109,8 +122,13 @@ class RealTimeArbiter:
         )
 
     def _is_intercepted(self, motion, piece):
+        # A jump only intercepts if the cell it guards is still actually
+        # defended by *some* piece - an empty guarded cell (e.g. left
+        # behind if its defender is ever removed some other way) must not
+        # intercept everything indiscriminately, which unguarded None !=
+        # piece.color would otherwise do.
         return any(
-            jump.cell == motion.destination and self._piece_color(jump.cell) != piece.color
+            jump.cell == motion.destination and self._piece_color(jump.cell) not in (None, piece.color)
             for jump in self._active_jumps
         )
 

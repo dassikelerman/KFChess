@@ -30,6 +30,24 @@ def test_get_set():
     assert board.piece_at(Position(1, 1)) == piece
 
 
+def test_remove_piece_by_stale_object_does_not_delete_the_new_occupant():
+    # A caller might hold onto a Piece object after the cell it names has
+    # since been taken over by a different piece (e.g. captured and
+    # replaced). remove_piece(Piece) must key off the piece's own id, not
+    # blindly trust piece.cell, or it would delete whatever is *currently*
+    # sitting there instead of the (already-gone) piece it was asked to
+    # remove.
+    board = make_board()
+    old_piece = make_piece("wQ", 1, 1)
+    board.add_piece(old_piece)
+    new_piece = make_piece("bN", 1, 1)  # takes over the same cell
+    board.add_piece(new_piece)
+
+    board.remove_piece(old_piece)  # stale reference to the piece no longer there
+
+    assert board.piece_at(Position(1, 1)) == new_piece
+
+
 def test_is_empty():
     board = make_board()
     assert board.piece_at(Position(0, 1)) is None

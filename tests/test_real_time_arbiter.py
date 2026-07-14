@@ -59,6 +59,48 @@ def test_advance_time_zero_does_not_advance_clock_but_still_resolves_due_motions
     assert board.piece_at(Position(0, 0)) is None
 
 
+def test_empty_guarded_cell_does_not_intercept_arrivals():
+    # An "orphaned" jump - guarding a cell nobody currently occupies - must
+    # not intercept everything indiscriminately just because there's no
+    # defender color to compare against. GameEngine.request_move() now
+    # refuses to move a piece off a cell it's guarding, so this can't
+    # happen through the public API anymore, but RealTimeArbiter's own
+    # start_jump()/start_motion() don't enforce that themselves, so this
+    # is tested directly at this level as defense in depth.
+    board = Board([[".", "."], ["wR", "."]])
+    arbiter = RealTimeArbiter(board)
+    rook = board.piece_at(Position(1, 0))
+
+    arbiter.start_jump(Position(0, 0), end_time=1000)  # nobody is at (0, 0)
+    arbiter.start_motion(rook, Position(1, 0), Position(0, 0), duration_ms=500)
+
+    events = arbiter.advance_time(500)
+
+    assert len(events) == 1
+    assert events[0].captured_piece_id is None  # not intercepted
+    assert board.piece_at(Position(0, 0)).id == rook.id  # landed normally
+
+
+def test_has_active_motion_ignores_a_stale_motion_whose_piece_was_replaced():
+    # Piece A starts a motion from S. Before A's motion resolves, piece B
+    # (from elsewhere) captures A on S itself. A's motion is still sitting
+    # in _active_motions with source=S, but S now holds B, which has no
+    # motion of its own - has_active_motion(S) must reflect B's real
+    # state, not A's stale, already-superseded one.
+    board = Board([["wQ", ".", "."], [".", ".", "."], ["bR", ".", "."]])
+    arbiter = RealTimeArbiter(board)
+    queen = board.piece_at(Position(0, 0))
+    rook = board.piece_at(Position(2, 0))
+
+    arbiter.start_motion(queen, Position(0, 0), Position(0, 1), duration_ms=1000)  # A: long move
+    arbiter.start_motion(rook, Position(2, 0), Position(0, 0), duration_ms=500)  # B: captures S
+
+    arbiter.advance_time(500)  # B lands on S, capturing A; A's motion is still pending
+
+    assert board.piece_at(Position(0, 0)).id == rook.id
+    assert not arbiter.has_active_motion(Position(0, 0))  # B is idle, not busy
+
+
 def test_stale_motion_does_not_move_a_different_piece_that_replaced_it_at_source():
     board = Board([["wQ", ".", "."], [".", ".", "."], ["bR", ".", "."]])
     arbiter = RealTimeArbiter(board)

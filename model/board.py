@@ -50,7 +50,7 @@ class Board:
 
     def remove_piece(self, piece_or_id):
         if isinstance(piece_or_id, Piece):
-            self._cells.pop(piece_or_id.cell, None)
+            self.remove_piece(piece_or_id.id)
             return
         position = next(
             (pos for pos, piece in self._cells.items() if piece.id == piece_or_id), None

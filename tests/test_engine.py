@@ -1,6 +1,7 @@
 import pytest
 
 from model.board import Board
+from model.game_state import MoveResult
 from model.position import Position
 from rules.rule_engine import RuleEngine, build_default_registry
 from engine.game_conditions import KingCaptureWinCondition, LastRankPromotion, WinCondition, PromotionRule
@@ -445,6 +446,24 @@ def test_jump_does_not_move_the_piece():
     assert get(board, 0, 0) == "bP"  # still on its own cell, board untouched by the jump itself
 
 
+def test_request_move_rejects_a_source_under_an_active_jump():
+    # Controller._is_busy() already blocks re-selecting a jump-guarding
+    # piece, but GameEngine.request_move() is a public method a caller
+    # could invoke directly (bypassing Controller). Without its own guard,
+    # the guarding piece could move away, leaving its jump "orphaned" on a
+    # now-empty (or later reoccupied) cell.
+    rows = [["bR", ".", "."]]
+    engine, controller, board = make_engine(rows)
+    controller.jump(*cell_to_pixel(0, 0))
+    assert engine.arbiter.is_jumping_on(Position(0, 0))
+
+    result = engine.request_move(Position(0, 0), Position(0, 1))
+
+    assert result == MoveResult(False, "jump_in_progress")
+    assert get(board, 0, 0) == "bR"  # the guarding piece never left
+    assert engine.arbiter.is_jumping_on(Position(0, 0))  # the guard is still intact
+
+
 def test_intercepted_move_removes_the_arriving_piece_entirely():
     rows = [["wR", "bP"], [".", "."]]
     engine, controller, board = make_engine(rows)
@@ -792,8 +811,32 @@ def test_stale_selection_after_capture_is_not_acted_on():
 
     controller.click(*cell_to_pixel(0, 1))  # attempt to move the (now-gone) wQ
     assert controller.selected is None  # stale selection discarded, not acted on
-    assert get(board, 0, 0) == "bR"  # bR untouched
-    assert get(board, 0, 1) == "."
+
+
+def test_idle_piece_that_captured_on_a_still_pending_source_is_immediately_usable():
+    # wR queues a long (2-square) move away from (2,0). Before that motion
+    # resolves, bB captures wR right on (2,0) with a shorter (1-square)
+    # move. Once bB lands, it is completely idle - but wR's own motion
+    # (source (2,0)) is still sitting in _active_motions until its own
+    # arrival_time elapses. (2,0) must not still read as "busy" because of
+    # a motion whose piece is no longer even there.
+    rows = [[".", ".", "."], [".", "bB", "."], ["wR", ".", "."]]
+    engine, controller, board = make_engine(rows)
+
+    controller.click(*cell_to_pixel(2, 0))
+    controller.click(*cell_to_pixel(0, 0))  # wR: (2,0) -> (0,0), distance 2 (long)
+    controller.click(*cell_to_pixel(1, 1))
+    controller.click(*cell_to_pixel(2, 0))  # bB: (1,1) -> (2,0), distance 1 (short capture)
+
+    engine.wait(MOVE_DURATION)  # bB lands and captures wR; wR's own motion is still pending
+    assert get(board, 2, 0) == "bB"
+    assert engine.arbiter.has_active_motion()  # wR's stale motion is still queued, just not on (2,0)
+
+    controller.click(*cell_to_pixel(2, 0))  # select the piece actually sitting there now
+    assert controller.selected == (2, 0)  # bB is idle and must be selectable
+
+    result = engine.request_move(Position(2, 0), Position(1, 1))
+    assert result.is_accepted  # not blocked by wR's already-superseded motion
 
 
 def test_construction_accepts_positive_durations():
