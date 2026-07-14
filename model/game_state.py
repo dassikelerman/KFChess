@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
-from model.piece import PieceColor, PieceState
+from model.piece import AnimationState, PieceColor, PieceState
 from model.position import Position
 
 
@@ -38,7 +38,15 @@ class MoveResult:
 class PieceSnapshot:
     """A read-only, board-independent view of one piece, for renderers
     or other consumers that shouldn't need to talk to Board/Position
-    directly."""
+    directly.
+
+    row/col are the piece's logical cell (an in-flight piece still shows
+    its source here, same as Board - see RealTimeArbiter). render_row/
+    render_col are the visual position for animation: identical to row/col
+    when idle, linearly interpolated between a motion's source and
+    destination while one is active. animation_state is derived similarly
+    - see GameEngine.snapshot().
+    """
 
     id: str
     kind: object  # PieceKind, or a raw custom-kind letter - see model.piece.parse_kind
@@ -46,6 +54,9 @@ class PieceSnapshot:
     state: PieceState
     row: int
     col: int
+    render_row: float
+    render_col: float
+    animation_state: AnimationState
 
 
 @dataclass(frozen=True)

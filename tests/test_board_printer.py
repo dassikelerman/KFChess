@@ -1,6 +1,6 @@
 from board_io.board_printer import BoardPrinter
 from model.game_state import GameSnapshot, PieceSnapshot
-from model.piece import PieceColor, PieceKind, PieceState
+from model.piece import AnimationState, PieceColor, PieceKind, PieceState
 
 
 def piece(token, row, col):
@@ -11,6 +11,9 @@ def piece(token, row, col):
         state=PieceState.IDLE,
         row=row,
         col=col,
+        render_row=float(row),
+        render_col=float(col),
+        animation_state=AnimationState.IDLE,
     )
 
 

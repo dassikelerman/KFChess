@@ -25,12 +25,7 @@ class AppComponents:
 
 
 def build_app(board_text):
-    """Compose the full object graph for one game: Board, RuleEngine,
-    RealTimeArbiter, GameEngine, BoardMapper, Controller. No line-parsing
-    logic lives here - board_text is already the board section's lines;
-    this function only builds and wires collaborators together, feeding
-    each one the literal constants it needs directly.
-    """
+  
     registry = build_default_registry(pawn_direction=constants.PAWN_DIRECTION)
     board = build_board(board_text, colors=constants.COLORS, empty_cell=constants.EMPTY_CELL)
 
@@ -52,7 +47,6 @@ def build_app(board_text):
 
 
 def run(input_lines):
-    """Parse input and execute all commands."""
     board_lines, command_lines = parse_input(input_lines)
 
     try:

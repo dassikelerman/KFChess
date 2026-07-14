@@ -45,6 +45,19 @@ class RealTimeArbiter:
     def is_jumping_on(self, cell):
         return any(jump.cell == cell for jump in self._active_jumps)
 
+    def active_motion_for(self, piece_id):
+        """The Motion currently in flight for this piece, or None -
+        read-only lookup by identity (never by cell; see has_active_motion)
+        for callers like GameEngine.snapshot() that need to render a
+        specific piece's progress without reaching into _active_motions."""
+        return next((m for m in self._active_motions if m.piece_id == piece_id), None)
+
+    def active_jump_for(self, cell):
+        """The Jump currently guarding this cell, or None - Jump is
+        deliberately cell-based rather than tied to a piece's identity
+        (see is_jumping_on), so this is keyed by cell too."""
+        return next((j for j in self._active_jumps if j.cell == cell), None)
+
     def start_motion(self, piece, source, destination, duration_ms):
         start_time = self._clock
         arrival_time = self._clock + duration_ms

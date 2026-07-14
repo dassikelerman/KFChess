@@ -2,6 +2,7 @@ import pytest
 
 from model.board import Board
 from model.game_state import MoveResult
+from model.piece import AnimationState
 from model.position import Position
 from rules.rule_engine import RuleEngine, build_default_registry
 from engine.game_conditions import KingCaptureWinCondition, LastRankPromotion, WinCondition, PromotionRule
@@ -24,6 +25,10 @@ def get(board, row, col):
 
 def is_empty(board, row, col):
     return board.piece_at(Position(row, col)) is None
+
+
+def snapshot_piece(engine, piece_id):
+    return next(p for p in engine.snapshot().pieces if p.id == piece_id)
 
 
 class NeverEndsWinCondition(WinCondition):
@@ -861,3 +866,71 @@ def test_construction_rejects_zero_jump_duration():
 def test_construction_rejects_negative_jump_duration():
     with pytest.raises(ValueError):
         make_engine([["wK", "."], [".", "."]], move_duration=1000, jump_duration=-100)
+
+
+def test_snapshot_render_position_matches_source_right_after_queuing_a_move():
+    rows = [["wR", ".", "."]]
+    engine, controller, board = make_engine(rows)
+    piece_id = board.piece_at(Position(0, 0)).id
+
+    controller.click(*cell_to_pixel(0, 0))
+    controller.click(*cell_to_pixel(0, 2))  # queue (0,0) -> (0,2), distance 2
+
+    snap = snapshot_piece(engine, piece_id)
+    assert (snap.row, snap.col) == (0, 0)  # logical position unchanged until arrival
+    assert (snap.render_row, snap.render_col) == (0.0, 0.0)
+    assert snap.animation_state == AnimationState.MOVE
+
+
+def test_snapshot_render_position_interpolates_midway_through_a_move():
+    rows = [["wR", ".", "."]]
+    engine, controller, board = make_engine(rows)
+    piece_id = board.piece_at(Position(0, 0)).id
+
+    controller.click(*cell_to_pixel(0, 0))
+    controller.click(*cell_to_pixel(0, 2))  # distance 2 -> duration = 2 * MOVE_DURATION
+
+    engine.wait(MOVE_DURATION)  # exactly halfway (progress = 0.5)
+
+    snap = snapshot_piece(engine, piece_id)
+    assert (snap.row, snap.col) == (0, 0)  # still logically at the source
+    assert snap.render_row == 0.0
+    assert snap.render_col == 1.0  # halfway between col 0 and col 2
+    assert snap.animation_state == AnimationState.MOVE
+
+
+def test_snapshot_render_position_matches_destination_after_arrival():
+    rows = [["wR", ".", "."]]
+    engine, controller, board = make_engine(rows)
+    piece_id = board.piece_at(Position(0, 0)).id
+
+    controller.click(*cell_to_pixel(0, 0))
+    controller.click(*cell_to_pixel(0, 2))
+    engine.wait(MOVE_DURATION * 2)  # fully lands
+
+    snap = snapshot_piece(engine, piece_id)
+    assert (snap.row, snap.col) == (0, 2)
+    assert (snap.render_row, snap.render_col) == (0.0, 2.0)
+    assert snap.animation_state == AnimationState.IDLE
+
+
+def test_snapshot_animation_state_is_jump_while_jump_active():
+    rows = [["bP", "."]]
+    engine, controller, board = make_engine(rows)
+    piece_id = board.piece_at(Position(0, 0)).id
+
+    controller.jump(*cell_to_pixel(0, 0))
+
+    snap = snapshot_piece(engine, piece_id)
+    assert snap.animation_state == AnimationState.JUMP
+    assert (snap.render_row, snap.render_col) == (0.0, 0.0)  # jumping doesn't move the piece
+
+
+def test_snapshot_animation_state_is_idle_by_default():
+    rows = [["wK", "."]]
+    engine, controller, board = make_engine(rows)
+    piece_id = board.piece_at(Position(0, 0)).id
+
+    snap = snapshot_piece(engine, piece_id)
+    assert snap.animation_state == AnimationState.IDLE
+    assert (snap.render_row, snap.render_col) == (0.0, 0.0)

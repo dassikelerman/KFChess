@@ -24,6 +24,25 @@ class PieceState(Enum):
     CAPTURED = "CAPTURED"
 
 
+class AnimationState(Enum):
+    """What a renderer should currently be playing for a piece - values
+    match the asset folder names (pieces1/<TOKEN>/states/) exactly.
+
+    LONG_REST/SHORT_REST are intentionally never produced by the engine
+    yet (see PieceSnapshot.animation_state) - a view can derive them
+    itself by noticing a piece's animation_state transition from MOVE/JUMP
+    to IDLE between two snapshots, and playing the one-shot rest animation
+    locally, without the engine needing to track "how long ago" anything
+    happened.
+    """
+
+    IDLE = "idle"
+    MOVE = "move"
+    JUMP = "jump"
+    LONG_REST = "long_rest"
+    SHORT_REST = "short_rest"
+
+
 @dataclass(frozen=True)
 class Piece:
     id: str

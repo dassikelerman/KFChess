@@ -121,3 +121,53 @@ def test_stale_motion_does_not_move_a_different_piece_that_replaced_it_at_source
     assert events == []  # fizzles: piece_id mismatch, nothing to report
     assert board.piece_at(Position(0, 1)) is None  # queen's destination stays empty
     assert board.piece_at(Position(0, 0)).id == rook.id  # rook untouched
+
+
+def test_active_motion_for_returns_the_motion_for_that_piece():
+    board = Board([["wR", "wN"], [".", "."]])
+    arbiter = RealTimeArbiter(board)
+    rook = board.piece_at(Position(0, 0))
+    knight = board.piece_at(Position(0, 1))
+
+    arbiter.start_motion(rook, Position(0, 0), Position(1, 0), duration_ms=1000)
+
+    motion = arbiter.active_motion_for(rook.id)
+    assert motion is not None
+    assert motion.piece_id == rook.id
+    assert motion.source == Position(0, 0)
+    assert motion.destination == Position(1, 0)
+
+    assert arbiter.active_motion_for(knight.id) is None  # knight never moved
+
+
+def test_active_motion_for_returns_none_after_the_motion_resolves():
+    board = Board([["wR", "."]])
+    arbiter = RealTimeArbiter(board)
+    rook = board.piece_at(Position(0, 0))
+
+    arbiter.start_motion(rook, Position(0, 0), Position(0, 1), duration_ms=500)
+    arbiter.advance_time(500)
+
+    assert arbiter.active_motion_for(rook.id) is None
+
+
+def test_active_jump_for_returns_the_jump_guarding_that_cell():
+    arbiter = RealTimeArbiter(Board([["bP", "."]]))
+
+    arbiter.start_jump(Position(0, 0), end_time=1000)
+
+    jump = arbiter.active_jump_for(Position(0, 0))
+    assert jump is not None
+    assert jump.cell == Position(0, 0)
+    assert jump.end_time == 1000
+
+    assert arbiter.active_jump_for(Position(0, 1)) is None  # nothing guards this cell
+
+
+def test_active_jump_for_returns_none_once_the_jump_expires():
+    arbiter = RealTimeArbiter(Board([["bP", "."]]))
+
+    arbiter.start_jump(Position(0, 0), end_time=500)
+    arbiter.advance_time(500)  # clock reaches end_time - jump is filtered out
+
+    assert arbiter.active_jump_for(Position(0, 0)) is None

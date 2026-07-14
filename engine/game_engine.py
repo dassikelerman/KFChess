@@ -1,7 +1,7 @@
 from dataclasses import replace
 
 from model.game_state import GameSnapshot, MoveResult, PieceSnapshot
-from model.piece import PieceColor, kind_letter, parse_kind
+from model.piece import AnimationState, PieceColor, kind_letter, parse_kind
 
 
 def _token(piece):
@@ -105,17 +105,7 @@ class GameEngine:
         self._advance(dt)
 
     def snapshot(self):
-        pieces = [
-            PieceSnapshot(
-                id=piece.id,
-                kind=piece.kind,
-                color=piece.color,
-                state=piece.state,
-                row=piece.cell.row,
-                col=piece.cell.col,
-            )
-            for piece in self._board.pieces()
-        ]
+        pieces = [self._piece_snapshot(piece) for piece in self._board.pieces()]
         return GameSnapshot(
             board_width=self._board.width,
             board_height=self._board.height,
@@ -124,6 +114,40 @@ class GameEngine:
         )
 
     # -- internal helpers -------------------------------------------------
+
+    def _piece_snapshot(self, piece):
+        motion = self._arbiter.active_motion_for(piece.id)
+        if motion is not None:
+            render_row, render_col = self._interpolated_position(motion)
+            animation_state = AnimationState.MOVE
+        elif self._arbiter.active_jump_for(piece.cell) is not None:
+            render_row, render_col = float(piece.cell.row), float(piece.cell.col)
+            animation_state = AnimationState.JUMP
+        else:
+            render_row, render_col = float(piece.cell.row), float(piece.cell.col)
+            # TODO: LONG_REST (just finished a move) / SHORT_REST (just
+            # finished a jump) are intentionally not distinguished from
+            # genuine idle here - see AnimationState's docstring for why,
+            # and how a view can derive them itself instead.
+            animation_state = AnimationState.IDLE
+
+        return PieceSnapshot(
+            id=piece.id,
+            kind=piece.kind,
+            color=piece.color,
+            state=piece.state,
+            row=piece.cell.row,
+            col=piece.cell.col,
+            render_row=render_row,
+            render_col=render_col,
+            animation_state=animation_state,
+        )
+
+    def _interpolated_position(self, motion):
+        progress = motion.progress_at(self._arbiter.clock)
+        row = motion.source.row + (motion.destination.row - motion.source.row) * progress
+        col = motion.source.col + (motion.destination.col - motion.source.col) * progress
+        return row, col
 
     def _advance(self, ms):
         events = self._arbiter.advance_time(ms)
