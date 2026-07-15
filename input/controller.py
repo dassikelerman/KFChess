@@ -78,10 +78,11 @@ class Controller:
                 self._selected_piece_id = target.id
             return
 
-        result = self._game_engine.request_move(start, pos)
-        if not result.is_accepted:
-            return  # illegal target: keep current selection
-
+        self._game_engine.request_move(start, pos)
+        # Whether the move was accepted or the target was illegal, the
+        # click pair is over: an illegal target cancels the selection
+        # instead of leaving it open for another attempt - the user must
+        # select the piece again from scratch.
         self._selected = None
         self._selected_piece_id = None
 

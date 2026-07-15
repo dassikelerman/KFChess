@@ -22,10 +22,12 @@ from texttests.script_runner import ScriptRunner
 class AppComponents:
     engine: GameEngine
     controller: Controller
+    board: object  # model.board.Board
+    board_mapper: BoardMapper
 
 
 def build_app(board_text):
-  
+
     registry = build_default_registry(pawn_direction=constants.PAWN_DIRECTION)
     board = build_board(board_text, colors=constants.COLORS, empty_cell=constants.EMPTY_CELL)
 
@@ -37,13 +39,15 @@ def build_app(board_text):
         promotion_rule=LastRankPromotion(),
         move_duration=constants.MOVE_DURATION,
         jump_duration=constants.JUMP_DURATION,
+        long_rest_duration=constants.LONG_REST_DURATION,
+        short_rest_duration=constants.SHORT_REST_DURATION,
     )
     board_mapper = BoardMapper(
         cell_size=constants.CELL_SIZE, board_width=board.width, board_height=board.height
     )
     controller = Controller(engine, board_mapper)
 
-    return AppComponents(engine=engine, controller=controller)
+    return AppComponents(engine=engine, controller=controller, board=board, board_mapper=board_mapper)
 
 
 def run(input_lines):

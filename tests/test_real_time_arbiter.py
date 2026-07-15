@@ -32,7 +32,11 @@ def test_motion_not_yet_due_stays_active():
 
     assert events == []
     assert arbiter.has_active_motion(Position(0, 0))
-    assert board.piece_at(Position(0, 0)) is rook  # board unchanged until arrival
+    # The piece already left the Board the instant the motion started -
+    # it travels as data on the Motion itself, not as a Board occupant -
+    # so the source reads as empty well before arrival, not "unchanged".
+    assert board.piece_at(Position(0, 0)) is None
+    assert board.piece_at(Position(0, 1)) is None  # not landed yet either
 
 
 def test_advance_time_rejects_negative_duration():
@@ -81,46 +85,69 @@ def test_empty_guarded_cell_does_not_intercept_arrivals():
     assert board.piece_at(Position(0, 0)).id == rook.id  # landed normally
 
 
-def test_has_active_motion_ignores_a_stale_motion_whose_piece_was_replaced():
-    # Piece A starts a motion from S. Before A's motion resolves, piece B
-    # (from elsewhere) captures A on S itself. A's motion is still sitting
-    # in _active_motions with source=S, but S now holds B, which has no
-    # motion of its own - has_active_motion(S) must reflect B's real
-    # state, not A's stale, already-superseded one.
+def test_enemy_moving_into_a_vacated_source_does_not_affect_the_departed_motion():
+    # The queen leaves (0, 0) the instant her own motion starts. While
+    # she's still in flight toward (0, 1), an *enemy* rook is free to
+    # move into the now-empty (0, 0) - that's a normal move into empty
+    # space, not a capture (the queen isn't there), and her own motion
+    # must land at her original destination completely unaffected.
     board = Board([["wQ", ".", "."], [".", ".", "."], ["bR", ".", "."]])
     arbiter = RealTimeArbiter(board)
     queen = board.piece_at(Position(0, 0))
     rook = board.piece_at(Position(2, 0))
 
-    arbiter.start_motion(queen, Position(0, 0), Position(0, 1), duration_ms=1000)  # A: long move
-    arbiter.start_motion(rook, Position(2, 0), Position(0, 0), duration_ms=500)  # B: captures S
-
-    arbiter.advance_time(500)  # B lands on S, capturing A; A's motion is still pending
-
-    assert board.piece_at(Position(0, 0)).id == rook.id
-    assert not arbiter.has_active_motion(Position(0, 0))  # B is idle, not busy
-
-
-def test_stale_motion_does_not_move_a_different_piece_that_replaced_it_at_source():
-    board = Board([["wQ", ".", "."], [".", ".", "."], ["bR", ".", "."]])
-    arbiter = RealTimeArbiter(board)
-    queen = board.piece_at(Position(0, 0))
-    rook = board.piece_at(Position(2, 0))
-
-    # The queen intends to move to (0, 1), queued with a long duration.
     arbiter.start_motion(queen, Position(0, 0), Position(0, 1), duration_ms=1000)
-    # Meanwhile the rook lands on the queen's cell first, capturing it.
-    arbiter.start_motion(rook, Position(2, 0), Position(0, 0), duration_ms=500)
+    assert board.piece_at(Position(0, 0)) is None  # the queen's old cell is free immediately
 
-    arbiter.advance_time(500)
+    arbiter.start_motion(rook, Position(2, 0), Position(0, 0), duration_ms=500)
+    events = arbiter.advance_time(500)  # rook lands on the now-empty cell - not a capture
+
+    assert events[0].captured_piece_id is None
     assert board.piece_at(Position(0, 0)).id == rook.id
 
-    # The queen's motion is now due, but (0, 0) no longer holds the queen.
-    events = arbiter.advance_time(500)
+    events = arbiter.advance_time(500)  # the queen's own motion now completes, untouched
 
-    assert events == []  # fizzles: piece_id mismatch, nothing to report
-    assert board.piece_at(Position(0, 1)) is None  # queen's destination stays empty
-    assert board.piece_at(Position(0, 0)).id == rook.id  # rook untouched
+    assert len(events) == 1
+    assert events[0].piece_id == queen.id
+    assert events[0].captured_piece_id is None
+    assert board.piece_at(Position(0, 1)).id == queen.id  # she reached her original destination
+    assert board.piece_at(Position(0, 0)).id == rook.id  # the rook is unaffected too
+
+
+def test_active_motion_from_returns_the_motion_departing_a_cell():
+    board = Board([["wR", "."]])
+    arbiter = RealTimeArbiter(board)
+    rook = board.piece_at(Position(0, 0))
+
+    arbiter.start_motion(rook, Position(0, 0), Position(0, 1), duration_ms=1000)
+
+    motion = arbiter.active_motion_from(Position(0, 0))
+    assert motion is not None
+    assert motion.piece_id == rook.id
+
+    assert arbiter.active_motion_from(Position(0, 1)) is None  # nothing departs from there
+
+
+def test_active_motion_from_prefers_the_most_recently_started_motion_for_a_shared_source():
+    # A departs S; before A resolves, B legally moves into the
+    # now-vacated S and is immediately sent off again itself, before A's
+    # own (longer) motion has resolved. Two active motions now share
+    # source=S - active_motion_from(S) should reflect what's actually
+    # happening at S right now (B's motion), not the stale historical
+    # claim (A's).
+    board = Board([["wR", "bN", "."]])
+    arbiter = RealTimeArbiter(board)
+    rook = board.piece_at(Position(0, 0))
+    knight = board.piece_at(Position(0, 1))
+
+    arbiter.start_motion(rook, Position(0, 0), Position(0, 2), duration_ms=1000)  # A: long, still pending
+    arbiter.advance_time(100)
+    arbiter.start_motion(knight, Position(0, 1), Position(0, 0), duration_ms=100)  # B: into S
+    arbiter.advance_time(100)  # B lands on S
+    arbiter.start_motion(knight, Position(0, 0), Position(0, 1), duration_ms=500)  # B departs S again
+
+    motion = arbiter.active_motion_from(Position(0, 0))
+    assert motion.piece_id == knight.id
 
 
 def test_active_motion_for_returns_the_motion_for_that_piece():
@@ -171,3 +198,144 @@ def test_active_jump_for_returns_none_once_the_jump_expires():
     arbiter.advance_time(500)  # clock reaches end_time - jump is filtered out
 
     assert arbiter.active_jump_for(Position(0, 0)) is None
+
+
+# -- in-transit collisions ---------------------------------------------------
+
+
+def test_head_on_collision_different_colors_later_arrival_wins_and_continues():
+    # White and black move toward each other along the same row, past
+    # rather than onto each other - the meeting cell (0, 3) is neither
+    # piece's own final destination, so the winner must be seen to
+    # continue past it rather than just landing there.
+    board = Board([["wR", ".", ".", ".", ".", ".", "bR"]])
+    arbiter = RealTimeArbiter(board)
+    white = board.piece_at(Position(0, 0))
+    black = board.piece_at(Position(0, 6))
+
+    arbiter.start_motion(white, Position(0, 0), Position(0, 4), duration_ms=400)  # 100ms/cell
+    arbiter.start_motion(black, Position(0, 6), Position(0, 1), duration_ms=600)  # 120ms/cell
+
+    # white reaches (0,3) at t=300; black reaches it at t=360 - black is
+    # later, so black wins the meeting there and keeps heading to (0,1).
+    events = arbiter.advance_time(360)
+
+    assert len(events) == 1
+    assert events[0].piece_id == black.id
+    assert events[0].captured_piece_id == white.id
+    assert events[0].destination == Position(0, 3)
+    assert board.piece_at(Position(0, 3)) is None  # black is passing through, not landing there
+    assert board.piece_at(Position(0, 4)) is None  # white never made it to its own destination either
+
+    events = arbiter.advance_time(240)  # black continues on to its own destination, (0, 1)
+
+    assert len(events) == 1
+    assert events[0].piece_id == black.id
+    assert board.piece_at(Position(0, 1)).id == black.id
+
+
+def test_crossing_paths_different_colors_later_arrival_captures_and_continues():
+    # Not head-on: white travels along a row, black along a column, and
+    # their paths only share a single intersection cell - not either
+    # one's final destination - so the winner must be seen to *continue
+    # past* the collision point rather than stopping there.
+    board = Board([
+        [".", ".", "bR", ".", "."],
+        [".", ".", ".", ".", "."],
+        ["wR", ".", ".", ".", "."],
+        [".", ".", ".", ".", "."],
+        [".", ".", ".", ".", "."],
+    ])
+    arbiter = RealTimeArbiter(board)
+    white = board.piece_at(Position(2, 0))
+    black = board.piece_at(Position(0, 2))
+
+    arbiter.start_motion(white, Position(2, 0), Position(2, 4), duration_ms=400)  # crosses col 2 at t=200
+    arbiter.advance_time(50)  # black enters the board's motion a bit later
+    arbiter.start_motion(black, Position(0, 2), Position(4, 2), duration_ms=400)  # crosses row 2 at t=250
+
+    events = arbiter.advance_time(200)  # up to t=250: the crossing collision resolves
+
+    assert len(events) == 1
+    assert events[0].piece_id == black.id
+    assert events[0].captured_piece_id == white.id
+    assert events[0].destination == Position(2, 2)
+    assert board.piece_at(Position(2, 2)) is None  # black is passing through, not landing there
+
+    events = arbiter.advance_time(200)  # black continues on to its own, further destination
+
+    assert len(events) == 1
+    assert events[0].piece_id == black.id
+    assert board.piece_at(Position(4, 2)).id == black.id
+
+
+def test_a_piece_starting_later_can_still_catch_up_and_capture():
+    # black is already 200ms into a long move (0,0)->(0,4) when white,
+    # starting right next to the same shared cell, is queued far behind
+    # in time but far ahead in distance. White reaches their shared cell
+    # only 50ms after black passes through it and, arriving later,
+    # catches and captures black there - despite black's huge head
+    # start. The collision is judged purely by actual arrival time.
+    board = Board([["bR", ".", ".", "wR", "."]])
+    arbiter = RealTimeArbiter(board)
+    black = board.piece_at(Position(0, 0))
+    white = board.piece_at(Position(0, 3))
+
+    arbiter.start_motion(black, Position(0, 0), Position(0, 4), duration_ms=400)  # 100ms/cell
+    arbiter.advance_time(200)  # black is now well underway; white only starts now
+    arbiter.start_motion(white, Position(0, 3), Position(0, 1), duration_ms=100)  # 50ms/cell
+
+    # black reaches the shared cell (0, 2) at t=200 (its 2nd step);
+    # white reaches it at t=200+50=250 (its 1st step) - white is later,
+    # so white wins that meeting and continues on toward (0, 1).
+    events = arbiter.advance_time(200)  # covers both the collision (t=250) and white's own landing (t=300)
+
+    assert len(events) == 2
+    collision, landing = events
+    assert collision.piece_id == white.id
+    assert collision.captured_piece_id == black.id
+    assert collision.destination == Position(0, 2)
+    assert landing.piece_id == white.id
+    assert landing.captured_piece_id is None
+    assert board.piece_at(Position(0, 1)).id == white.id  # white reached its own destination
+
+
+def test_exact_simultaneous_meeting_between_enemies_destroys_both():
+    board = Board([["wR", ".", "."], [".", ".", "."], ["bR", ".", "."]])
+    arbiter = RealTimeArbiter(board)
+    white = board.piece_at(Position(0, 0))
+    black = board.piece_at(Position(2, 0))
+
+    # Equal distance (2) to the same meeting cell, started at the same
+    # time - a genuine exact tie, not "whoever was queued first".
+    arbiter.start_motion(white, Position(0, 0), Position(2, 0), duration_ms=1000)
+    arbiter.start_motion(black, Position(2, 0), Position(0, 0), duration_ms=1000)
+
+    events = arbiter.advance_time(1000)
+
+    assert {event.piece_id for event in events} == {white.id, black.id}
+    # Each event self-reports its own destruction - the documented,
+    # deterministic policy for an exact enemy tie: no well-defined
+    # winner, so neither survives.
+    assert all(event.captured_piece_id == event.piece_id for event in events)
+    assert board.piece_at(Position(1, 0)) is None  # nobody actually lands at the meeting cell
+
+
+def test_same_result_for_one_big_wait_as_for_several_small_waits():
+    def build():
+        board = Board([["wR", ".", "."], [".", ".", "."], ["bR", ".", "."]])
+        arbiter = RealTimeArbiter(board)
+        white = board.piece_at(Position(0, 0))
+        black = board.piece_at(Position(2, 0))
+        arbiter.start_motion(white, Position(0, 0), Position(0, 2), duration_ms=1000)
+        arbiter.start_motion(black, Position(2, 0), Position(0, 2), duration_ms=1500)
+        return board, arbiter
+
+    board_a, arbiter_a = build()
+    arbiter_a.advance_time(2000)  # one big jump
+
+    board_b, arbiter_b = build()
+    for _ in range(20):
+        arbiter_b.advance_time(100)  # twenty small steps covering the same total span
+
+    assert board_a.snapshot() == board_b.snapshot()
