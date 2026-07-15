@@ -45,7 +45,10 @@ class PieceSnapshot:
     render_col are the visual position for animation: identical to row/col
     when idle, linearly interpolated between a motion's source and
     destination while one is active. animation_state is derived similarly
-    - see GameEngine.snapshot().
+    - see GameEngine.snapshot(). rest_fraction_remaining is None unless
+    the piece is currently in a post-move/post-jump cooldown, in which
+    case it's a fraction from 1.0 (just started) down to just above 0.0
+    (about to finish) - purely for rendering a fading cooldown indicator.
     """
 
     id: str
@@ -57,6 +60,7 @@ class PieceSnapshot:
     render_row: float
     render_col: float
     animation_state: AnimationState
+    rest_fraction_remaining: Optional[float]
 
 
 @dataclass(frozen=True)

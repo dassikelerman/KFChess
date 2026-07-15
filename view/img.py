@@ -61,7 +61,12 @@ class Img:
             if self.img.shape[2] == 3 and other_img.img.shape[2] == 4:
                 self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2BGRA)
             elif self.img.shape[2] == 4 and other_img.img.shape[2] == 3:
-                self.img = cv2.cvtColor(self.img, cv2.COLOR_BGRA2BGR)
+                # Give the target an alpha channel instead of stripping
+                # the source's - dropping self.img's alpha here would
+                # throw away its real transparency and paint whatever
+                # raw color sits under the "transparent" pixels (often
+                # black) as fully opaque.
+                other_img.img = cv2.cvtColor(other_img.img, cv2.COLOR_BGR2BGRA)
 
         h, w = self.img.shape[:2]
         H, W = other_img.img.shape[:2]

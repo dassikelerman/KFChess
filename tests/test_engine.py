@@ -815,6 +815,31 @@ def test_cooldown_only_starts_once_a_piece_truly_lands_not_at_a_mid_flight_captu
     assert not engine.arbiter.is_resting(black_id)
 
 
+def test_snapshot_reports_rest_fraction_remaining_for_a_resting_piece():
+    rows = [["wR", ".", "."], [".", ".", "."], [".", ".", "."]]
+    engine, controller, board = make_engine(rows, long_rest_duration=1000)
+    piece_id = board.piece_at(Position(0, 0)).id
+
+    controller.click(*cell_to_pixel(0, 0))
+    controller.click(*cell_to_pixel(0, 2))
+    engine.wait(MOVE_DURATION * 2)  # lands; long-rest cooldown (1000ms) starts now
+
+    assert snapshot_piece(engine, piece_id).rest_fraction_remaining == 1.0
+
+    engine.wait(500)  # halfway through the cooldown
+    assert snapshot_piece(engine, piece_id).rest_fraction_remaining == 0.5
+
+    engine.wait(500)  # cooldown fully elapsed
+    assert snapshot_piece(engine, piece_id).rest_fraction_remaining is None
+
+
+def test_snapshot_rest_fraction_remaining_is_none_for_an_idle_piece():
+    engine, controller, board = make_engine([["wR", "."]])
+    piece_id = board.piece_at(Position(0, 0)).id
+
+    assert snapshot_piece(engine, piece_id).rest_fraction_remaining is None
+
+
 def test_opposite_color_moves_can_be_in_flight_simultaneously():
     rows = [["bR", ".", "."], [".", ".", "."], [".", ".", "wR"]]
     engine, controller, board = make_engine(rows)

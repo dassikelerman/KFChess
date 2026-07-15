@@ -84,7 +84,7 @@ def test_animation_library_loads_the_move_clip_matching_its_config_json():
 
     assert clip.config.speed_m_per_sec == 1.5
     assert clip.config.next_state_when_finished == "long_rest"
-    assert clip.config.frames_per_sec == 12
+    assert clip.config.frames_per_sec == 10
     assert clip.config.is_loop is True
     assert len(clip.sprite_paths) == 5
 

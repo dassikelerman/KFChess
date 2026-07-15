@@ -190,6 +190,7 @@ class GameEngine:
             render_row=float(piece.cell.row),
             render_col=float(piece.cell.col),
             animation_state=animation_state,
+            rest_fraction_remaining=self._arbiter.rest_remaining_fraction(piece.id),
         )
 
     def _in_flight_piece_snapshot(self, motion):
@@ -210,6 +211,7 @@ class GameEngine:
             render_row=render_row,
             render_col=render_col,
             animation_state=AnimationState.MOVE,
+            rest_fraction_remaining=None,  # can't be resting while mid-flight
         )
 
     def _interpolated_position(self, motion):
@@ -235,7 +237,7 @@ class GameEngine:
 
         for piece in expiring_jump_pieces:
             if piece is not None:
-                self._arbiter.set_cooldown(piece.id, new_clock + self._short_rest_duration)
+                self._arbiter.set_cooldown(piece.id, self._short_rest_duration)
 
         self._apply_events(events)
 
@@ -261,7 +263,7 @@ class GameEngine:
             # The piece truly landed here (as opposed to a mid-flight
             # collision capture that continues on - see the check above),
             # so its walk is over: start its long-rest cooldown.
-            self._arbiter.set_cooldown(moved.id, self._arbiter.clock + self._long_rest_duration)
+            self._arbiter.set_cooldown(moved.id, self._long_rest_duration)
 
             promoted_token = self._promotion_rule.promote(
                 _token(moved), event.destination.row, self._board.height

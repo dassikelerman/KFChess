@@ -14,6 +14,7 @@ def piece(token, row, col):
         render_row=float(row),
         render_col=float(col),
         animation_state=AnimationState.IDLE,
+        rest_fraction_remaining=None,
     )
 
 

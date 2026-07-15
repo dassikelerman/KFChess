@@ -27,7 +27,7 @@ class RealTimeArbiter:
         self._clock = 0
         self._active_motions = []
         self._active_jumps = []
-        self._cooldowns = {}  # piece_id -> absolute clock time it's resting until
+        self._cooldowns = {}  # piece_id -> (start_time, end_time) of its current rest
 
     @property
     def clock(self):
@@ -38,11 +38,27 @@ class RealTimeArbiter:
         cooldown (see GameEngine's long/short rest handling) and can't
         act again yet. Purely a time comparison - callers set the
         cooldown itself via set_cooldown()."""
-        end_time = self._cooldowns.get(piece_id)
-        return end_time is not None and self._clock < end_time
+        return self.rest_remaining_fraction(piece_id) is not None
 
-    def set_cooldown(self, piece_id, end_time):
-        self._cooldowns[piece_id] = end_time
+    def set_cooldown(self, piece_id, duration_ms):
+        self._cooldowns[piece_id] = (self._clock, self._clock + duration_ms)
+
+    def rest_remaining_fraction(self, piece_id):
+        """How much of this piece's current rest is still left, as a
+        fraction from 1.0 (just started resting) down to just above 0.0
+        (about to finish) - or None if it isn't resting at all. Purely
+        for rendering a fading cooldown indicator; game rules only ever
+        need the boolean is_resting()."""
+        entry = self._cooldowns.get(piece_id)
+        if entry is None:
+            return None
+        start_time, end_time = entry
+        if self._clock >= end_time:
+            return None
+        total = end_time - start_time
+        if total <= 0:
+            return 0.0
+        return (end_time - self._clock) / total
 
     def active_jumps(self):
         """A read-only snapshot of every currently active jump - lets a

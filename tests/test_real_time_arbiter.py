@@ -339,3 +339,47 @@ def test_same_result_for_one_big_wait_as_for_several_small_waits():
         arbiter_b.advance_time(100)  # twenty small steps covering the same total span
 
     assert board_a.snapshot() == board_b.snapshot()
+
+
+# -- cooldown -----------------------------------------------------------
+
+
+def test_rest_remaining_fraction_is_none_when_never_rested():
+    arbiter = RealTimeArbiter(Board([["wR", "."]]))
+    assert arbiter.rest_remaining_fraction("wR@0,0") is None
+    assert not arbiter.is_resting("wR@0,0")
+
+
+def test_rest_remaining_fraction_starts_at_one_and_decreases():
+    arbiter = RealTimeArbiter(Board([["wR", "."]]))
+    arbiter.set_cooldown("wR@0,0", duration_ms=1000)
+
+    assert arbiter.rest_remaining_fraction("wR@0,0") == 1.0
+    assert arbiter.is_resting("wR@0,0")
+
+    arbiter.advance_time(250)
+    assert arbiter.rest_remaining_fraction("wR@0,0") == 0.75
+
+    arbiter.advance_time(500)
+    assert arbiter.rest_remaining_fraction("wR@0,0") == 0.25
+
+
+def test_rest_remaining_fraction_is_none_once_the_cooldown_ends():
+    arbiter = RealTimeArbiter(Board([["wR", "."]]))
+    arbiter.set_cooldown("wR@0,0", duration_ms=1000)
+
+    arbiter.advance_time(1000)
+
+    assert arbiter.rest_remaining_fraction("wR@0,0") is None
+    assert not arbiter.is_resting("wR@0,0")
+
+
+def test_set_cooldown_uses_the_current_clock_as_the_rest_start():
+    arbiter = RealTimeArbiter(Board([["wR", "."]]))
+    arbiter.advance_time(500)  # clock is now 500
+
+    arbiter.set_cooldown("wR@0,0", duration_ms=200)
+
+    assert arbiter.rest_remaining_fraction("wR@0,0") == 1.0
+    arbiter.advance_time(200)  # ends at clock 700, exactly 200ms of rest
+    assert arbiter.rest_remaining_fraction("wR@0,0") is None

@@ -117,24 +117,57 @@ SHORT_REST_DURATION = 500   # אחרי קפיצה (jump)
 להזיז אותו שוב מיד - נדחה בשקט (נשאר במקום). מחכים 1500ms נוספים -
 אותו מהלך בדיוק מצליח הפעם. בדיוק ההתנהגות המבוקשת.
 
+## 6. אינדיקטור ויזואלי לזמן המנוחה (overlay דועך)
+
+**קבצים:** `realtime/real_time_arbiter.py`, `model/game_state.py`, `engine/game_engine.py`, `view/game_view.py`.
+
+בקשה: לראות ב-UI צבע עדין על המשבצת של כלי נח, שדועך עד סוף זמן
+המנוחה - מהר יותר במנוחה קצרה, לאט יותר בארוכה.
+
+- `RealTimeArbiter._cooldowns` שונה מ-`{piece_id: end_time}` ל-
+  `{piece_id: (start_time, end_time)}`, ו-`set_cooldown(piece_id, duration_ms)`
+  משתמש עכשיו בשעון הנוכחי כ-start (כמו `start_motion`/`start_jump`
+  הקיימים - עקבי).
+- מתודה חדשה: `RealTimeArbiter.rest_remaining_fraction(piece_id)` -
+  מחזירה שבר מ-1.0 (התחיל לנוח הרגע) ויורד עד קרוב ל-0.0 (עומד
+  להסתיים), או `None` אם לא נח. **מנורמל לפי משך המנוחה *בפועל* של אותו
+  כלי** - זו הסיבה שמנוחה קצרה דועכת מהר ומנוחה ארוכה לאט, בלי שום
+  לוגיקה נפרדת לקצב הדעיכה.
+- `PieceSnapshot` קיבל שדה חדש `rest_fraction_remaining: Optional[float]`,
+  ממולא ב-`GameEngine._settled_piece_snapshot` (ו-`None` תמיד לכלים
+  באוויר - הם לא יכולים לנוח).
+- `GameView._draw_rest_overlay`: צובע מלבן שקוף-למחצה בצבע עדין
+  (`REST_OVERLAY_COLOR_BGR`, אלפא מקסימלי `REST_OVERLAY_MAX_ALPHA=0.35`)
+  על תא הכלי, **מתחת** לספרייט שלו (נצבע לפני הכלי עצמו) - האלפא בפועל
+  = `0.35 * rest_fraction_remaining`, כך שהצבע דועך ליניארית לכלום.
+
+### אימות חי (לא רק טסטים)
+הרצתי רינדור אמיתי (`GameView.render`) על כלי שזז ונח, ובדקתי פיקסלים
+בפועל בתמונה שהתקבלה: מיד אחרי נחיתה (`fraction=1.0`) הפינה של התא
+צבועה בעוצמה מלאה; באמצע המנוחה (`fraction=0.5`) עוצמת הצבע בדיוק
+מחצית; אחרי שהמנוחה נגמרת (`fraction=None`) הצבע נעלם לגמרי וחוזר
+לפיקסל המקורי של הלוח.
+
 ## קבצים ששונו/נוספו היום - סיכום
 
 | קובץ | סטטוס |
 |---|---|
 | `realtime/motion.py` | שונה - `Motion` שומר `piece` מלא, `path_cells`/`time_at_cell`/`truncate_before` |
-| `realtime/real_time_arbiter.py` | שונה - מודל אירועים כרונולוגי, `is_resting`/`set_cooldown`/`active_jumps` |
+| `realtime/real_time_arbiter.py` | שונה - מודל אירועים כרונולוגי, `is_resting`/`set_cooldown`/`rest_remaining_fraction`/`active_jumps` |
+| `model/game_state.py` | שונה - `PieceSnapshot.rest_fraction_remaining` |
 | `engine/game_engine.py` | שונה - snapshot כולל כלים באוויר, בדיקות resting, cooldown ב-`_advance`/`_apply_events` |
 | `input/controller.py` | שונה - ביטול בחירה ביעד לא חוקי |
 | `constants.py` | שונה - `LONG_REST_DURATION`, `SHORT_REST_DURATION` |
 | `app.py` | שונה - מזין את הקבועים החדשים ל-`GameEngine` |
 | `view/click_router.py`, `view/run.py` | שונה - ניתוב `jump()` ל-לחיצה ימנית |
+| `view/game_view.py` | שונה - `_draw_rest_overlay` (צבע דועך) |
 | `view/piece_state_machine.py` | חדש - State Machine ויזואלי |
-| `tests/test_engine.py`, `tests/test_real_time_arbiter.py`, `tests/test_click_router.py` | שונה - עדכון טסטים ישנים + טסטים חדשים |
+| `tests/test_engine.py`, `tests/test_real_time_arbiter.py`, `tests/test_click_router.py`, `tests/test_board_printer.py` | שונה - עדכון טסטים ישנים + טסטים חדשים |
 | `tests/test_piece_state_machine.py` | חדש |
 
 ## תוצאות
 
-**222/222 טסטים עוברים.** כל שינוי בעל השפעה על טסטים קיימים אומת
+**228/228 טסטים עוברים.** כל שינוי בעל השפעה על טסטים קיימים אומת
 בנפרד (הרצה עם השינוי מבוטל זמנית → הטסט נכשל → שחזור → הטסט עובר),
 בנוסף לאימות חי דרך ה-pipeline הטקסטואלי המלא לשני התרחישים המרכזיים
 (התנגשות אוויר, cooldown).
