@@ -1,8 +1,9 @@
 """A view-side state machine over AnimationState (model/piece.py),
-layering the one-shot rest states (LONG_REST/SHORT_REST) on top of what
-GameEngine reports (IDLE/MOVE/JUMP) - see AnimationState's own docstring
-for why the engine itself never produces LONG_REST/SHORT_REST: it's a
-purely visual concern belonging to the view, not to game state.
+layering the one-shot rest states (LONG_REST/SHORT_REST) on top of the
+IDLE/MOVE/JUMP derived from GameEngine's logical PieceSnapshot fields
+(see view.animation_state.derive_animation_state) - GameEngine itself
+never produces an AnimationState at all; LONG_REST/SHORT_REST are a
+purely visual concern belonging exclusively to the view.
 
 Driven by the same AnimationLibrary (assets/piece_animations.py) already
 used for rendering: each state's config.json carries its own
@@ -13,14 +14,16 @@ idle, for every piece in pieces2/).
 """
 
 from model.piece import AnimationState
+from view.animation_state import derive_animation_state
 
 _STATE_BY_VALUE = {state.value: state for state in AnimationState}
 
 
 class PieceStateMachine:
     """Tracks, per piece id, its *effective* AnimationState - which may
-    be LONG_REST/SHORT_REST even though GameEngine.snapshot() only ever
-    reports IDLE/MOVE/JUMP via PieceSnapshot.animation_state.
+    be LONG_REST/SHORT_REST even though the state derived from
+    GameEngine.snapshot() (via derive_animation_state) only ever yields
+    IDLE/MOVE/JUMP.
 
     No cv2/pygame dependency - just AnimationLibrary lookups and
     bookkeeping - so it's unit testable without a display.
@@ -31,7 +34,7 @@ class PieceStateMachine:
         self._entries = {}  # piece_id -> (AnimationState, entered_at_ms)
 
     def state_for(self, piece_snapshot, clock_ms):
-        engine_state = piece_snapshot.animation_state
+        engine_state = derive_animation_state(piece_snapshot)
 
         if engine_state in (AnimationState.MOVE, AnimationState.JUMP):
             # The engine's own report is authoritative and immediate - a

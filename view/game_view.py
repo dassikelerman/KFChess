@@ -1,6 +1,7 @@
 import numpy as np
 
 from assets.piece_animations import frame_index_for
+from view.animation_state import derive_animation_state
 from view.img import Img
 from view.piece_animator import PieceAnimator
 
@@ -70,7 +71,7 @@ class GameView:
         roi[:] = (roi * (1 - alpha) + color * alpha).astype(roi.dtype)
 
     def _draw_piece(self, canvas, piece, clock_ms):
-        clip = self._library.get(piece.color, piece.kind, piece.animation_state)
+        clip = self._library.get(piece.color, piece.kind, derive_animation_state(piece))
         elapsed_ms = self._animator.elapsed_ms_for(piece, clock_ms)
         sprite_path = clip.sprite_paths[frame_index_for(clip, elapsed_ms)]
         sprite = self._sprite(sprite_path)

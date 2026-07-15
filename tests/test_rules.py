@@ -1,7 +1,7 @@
 import pytest
 
 from model.board import Board
-from model.piece import Piece, PieceColor, PieceKind, PieceState
+from model.piece import Piece, PieceColor, PieceKind
 from model.position import Position
 from rules.piece_rules import (
     MoveContext,
@@ -16,7 +16,6 @@ def place(board, row, col, token):
         color=PieceColor(token[0]),
         kind=PieceKind(token[1]),
         cell=Position(row, col),
-        state=PieceState.IDLE,
     ))
 
 

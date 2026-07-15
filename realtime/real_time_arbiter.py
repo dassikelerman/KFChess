@@ -67,38 +67,14 @@ class RealTimeArbiter:
         them from _active_jumps."""
         return list(self._active_jumps)
 
-    def has_active_motion(self, cell=None):
-        if cell is None:
-            return bool(self._active_motions)
-        return self.active_motion_from(cell) is not None
-
-    def active_motion_from(self, cell):
-        """The Motion currently departing FROM this cell (cell ==
-        motion.source), or None.
-
-        A piece leaves its source the instant its motion starts and is
-        never "back" there until it actually lands elsewhere, so this is
-        purely a lookup over active motions - no board state is involved.
-        It's possible (if unusual) for more than one active motion to
-        share a source: a piece can legally move into a cell another
-        piece just vacated, and then itself depart again before the
-        original motion has resolved. The most recently started motion
-        is what's actually relevant to that cell right now, so ties are
-        broken in its favour.
-        """
-        candidates = [m for m in self._active_motions if m.source == cell]
-        if not candidates:
-            return None
-        return max(candidates, key=lambda m: m.start_time)
-
     def is_jumping_on(self, cell):
         return any(jump.cell == cell for jump in self._active_jumps)
 
     def active_motion_for(self, piece_id):
         """The Motion currently in flight for this piece, or None -
-        read-only lookup by identity (never by cell; see has_active_motion)
-        for callers like GameEngine.snapshot() that need to render a
-        specific piece's progress without reaching into _active_motions."""
+        read-only lookup by identity, for callers like GameEngine.
+        snapshot() that need to render a specific piece's progress
+        without reaching into _active_motions."""
         return next((m for m in self._active_motions if m.piece_id == piece_id), None)
 
     def active_motions(self):

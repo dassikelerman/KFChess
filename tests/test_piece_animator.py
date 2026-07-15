@@ -5,7 +5,11 @@ from view.piece_animator import PieceAnimator
 
 
 def piece(id_, state):
-    return SimpleNamespace(id=id_, animation_state=state)
+    return SimpleNamespace(
+        id=id_,
+        is_moving=state == AnimationState.MOVE,
+        is_jumping=state == AnimationState.JUMP,
+    )
 
 
 def test_first_sighting_of_a_piece_has_zero_elapsed():

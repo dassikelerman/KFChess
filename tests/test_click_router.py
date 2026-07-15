@@ -187,7 +187,7 @@ def test_jump_on_empty_cell_is_a_no_op():
 
     assert white.selected is None
     assert black.selected is None
-    assert not engine.arbiter.has_active_motion()
+    assert engine.arbiter.active_motions() == []
 
 
 def test_jump_does_not_disturb_an_unrelated_active_gesture_on_the_other_side():

@@ -1,7 +1,7 @@
 from dataclasses import replace
 
 from model.game_state import GameSnapshot, MoveResult, PieceSnapshot
-from model.piece import AnimationState, PieceColor, kind_letter, parse_kind
+from model.piece import PieceColor, kind_letter, parse_kind
 
 
 def _token(piece):
@@ -97,7 +97,7 @@ class GameEngine:
         # the instant its own motion started (see RealTimeArbiter.
         # start_motion), so there's nothing there for validate_move() to
         # find - it already rejects this as "empty_source" below, without
-        # needing its own has_active_motion() check.
+        # needing any additional motion-tracking check here.
         piece = self._board.piece_at(source)
         if piece is not None and self._arbiter.is_resting(piece.id):
             return MoveResult(False, "resting")
@@ -105,15 +105,6 @@ class GameEngine:
         validation = self._rule_engine.validate_move(self._board, source, destination)
         if not validation.is_valid:
             return MoveResult(False, validation.reason)
-
-        # The Board shows a departing piece's old cell as empty (see
-        # above), so validate_move() alone can't tell "genuinely empty"
-        # apart from "a teammate just left here". A same-color piece must
-        # still be kept out of that cell, same as if the teammate were
-        # still sitting there; an enemy is free to move into it.
-        departing = self._arbiter.active_motion_from(destination)
-        if departing is not None and departing.piece.color == piece.color:
-            return MoveResult(False, "friendly_departure_cell")
 
         distance = max(abs(destination.row - source.row), abs(destination.col - source.col))
         duration_ms = self._move_duration * distance
@@ -170,26 +161,17 @@ class GameEngine:
     def _settled_piece_snapshot(self, piece):
         # A piece from board.pieces() is never mid-flight - only
         # in-flight pieces (handled separately below) ever have an
-        # active motion - so only jump/idle apply here.
-        if self._arbiter.active_jump_for(piece.cell) is not None:
-            animation_state = AnimationState.JUMP
-        else:
-            # TODO: LONG_REST (just finished a move) / SHORT_REST (just
-            # finished a jump) are intentionally not distinguished from
-            # genuine idle here - see AnimationState's docstring for why,
-            # and how a view can derive them itself instead.
-            animation_state = AnimationState.IDLE
-
+        # active motion.
         return PieceSnapshot(
             id=piece.id,
             kind=piece.kind,
             color=piece.color,
-            state=piece.state,
             row=piece.cell.row,
             col=piece.cell.col,
             render_row=float(piece.cell.row),
             render_col=float(piece.cell.col),
-            animation_state=animation_state,
+            is_moving=False,
+            is_jumping=self._arbiter.active_jump_for(piece.cell) is not None,
             rest_fraction_remaining=self._arbiter.rest_remaining_fraction(piece.id),
         )
 
@@ -205,12 +187,12 @@ class GameEngine:
             id=piece.id,
             kind=piece.kind,
             color=piece.color,
-            state=piece.state,
             row=motion.source.row,
             col=motion.source.col,
             render_row=render_row,
             render_col=render_col,
-            animation_state=AnimationState.MOVE,
+            is_moving=True,
+            is_jumping=False,  # can't be jump-guarding while mid-flight
             rest_fraction_remaining=None,  # can't be resting while mid-flight
         )
 

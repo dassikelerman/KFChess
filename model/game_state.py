@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
-from model.piece import AnimationState, PieceColor, PieceState
+from model.piece import PieceColor
 from model.position import Position
 
 
@@ -44,22 +44,25 @@ class PieceSnapshot:
     its source here, same as Board - see RealTimeArbiter). render_row/
     render_col are the visual position for animation: identical to row/col
     when idle, linearly interpolated between a motion's source and
-    destination while one is active. animation_state is derived similarly
-    - see GameEngine.snapshot(). rest_fraction_remaining is None unless
-    the piece is currently in a post-move/post-jump cooldown, in which
-    case it's a fraction from 1.0 (just started) down to just above 0.0
-    (about to finish) - purely for rendering a fading cooldown indicator.
+    destination while one is active. is_moving/is_jumping are the piece's
+    current logical activity - purely game facts, not an animation
+    concept; a view derives whatever AnimationState it wants to render
+    from these itself (see view.animation_state.derive_animation_state).
+    rest_fraction_remaining is None unless the piece is currently in a
+    post-move/post-jump cooldown, in which case it's a fraction from 1.0
+    (just started) down to just above 0.0 (about to finish) - purely for
+    rendering a fading cooldown indicator.
     """
 
     id: str
     kind: object  # PieceKind, or a raw custom-kind letter - see model.piece.parse_kind
     color: PieceColor
-    state: PieceState
     row: int
     col: int
     render_row: float
     render_col: float
-    animation_state: AnimationState
+    is_moving: bool
+    is_jumping: bool
     rest_fraction_remaining: Optional[float]
 
 

@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from model.piece import Piece, PieceColor, PieceState, kind_letter, parse_kind
+from model.piece import Piece, PieceColor, kind_letter, parse_kind
 from model.position import Position
 
 
@@ -27,7 +27,6 @@ class Board:
                         color=PieceColor(token[0]),
                         kind=parse_kind(token[1]),
                         cell=pos,
-                        state=PieceState.IDLE,
                     )
                 )
 

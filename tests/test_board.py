@@ -1,5 +1,5 @@
 from model.board import Board
-from model.piece import Piece, PieceColor, PieceKind, PieceState
+from model.piece import Piece, PieceColor, PieceKind
 from model.position import Position
 
 
@@ -9,7 +9,6 @@ def make_piece(token, row, col):
         color=PieceColor(token[0]),
         kind=PieceKind(token[1]),
         cell=Position(row, col),
-        state=PieceState.IDLE,
     )
 
 

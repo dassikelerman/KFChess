@@ -1,4 +1,4 @@
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import Enum
 
 from model.position import Position
@@ -18,22 +18,17 @@ class PieceKind(Enum):
     PAWN = "P"
 
 
-class PieceState(Enum):
-    IDLE = "IDLE"
-    MOVING = "MOVING"
-    CAPTURED = "CAPTURED"
-
-
 class AnimationState(Enum):
     """What a renderer should currently be playing for a piece - values
     match the asset folder names (pieces1/<TOKEN>/states/) exactly.
 
-    LONG_REST/SHORT_REST are intentionally never produced by the engine
-    yet (see PieceSnapshot.animation_state) - a view can derive them
-    itself by noticing a piece's animation_state transition from MOVE/JUMP
-    to IDLE between two snapshots, and playing the one-shot rest animation
-    locally, without the engine needing to track "how long ago" anything
-    happened.
+    Purely a view-side concept: GameEngine never constructs or reports an
+    AnimationState. PieceSnapshot instead carries logical facts
+    (is_moving/is_jumping) that a view derives IDLE/MOVE/JUMP from itself
+    (see view.animation_state.derive_animation_state); LONG_REST/
+    SHORT_REST are layered on top of that by view.piece_state_machine.
+    PieceStateMachine, without the engine needing to track "how long ago"
+    anything happened.
     """
 
     IDLE = "idle"
@@ -49,16 +44,6 @@ class Piece:
     color: PieceColor
     kind: PieceKind
     cell: Position
-    state: PieceState
-
-    def mark_moving(self) -> "Piece":
-        return replace(self, state=PieceState.MOVING)
-
-    def mark_idle(self) -> "Piece":
-        return replace(self, state=PieceState.IDLE)
-
-    def mark_captured(self) -> "Piece":
-        return replace(self, state=PieceState.CAPTURED)
 
 
 def parse_kind(letter):

@@ -31,7 +31,7 @@ def test_motion_not_yet_due_stays_active():
     events = arbiter.advance_time(999)  # one ms short of arrival
 
     assert events == []
-    assert arbiter.has_active_motion(Position(0, 0))
+    assert arbiter.active_motion_for(rook.id) is not None
     # The piece already left the Board the instant the motion started -
     # it travels as data on the Motion itself, not as a Board occupant -
     # so the source reads as empty well before arrival, not "unchanged".
@@ -112,42 +112,6 @@ def test_enemy_moving_into_a_vacated_source_does_not_affect_the_departed_motion(
     assert events[0].captured_piece_id is None
     assert board.piece_at(Position(0, 1)).id == queen.id  # she reached her original destination
     assert board.piece_at(Position(0, 0)).id == rook.id  # the rook is unaffected too
-
-
-def test_active_motion_from_returns_the_motion_departing_a_cell():
-    board = Board([["wR", "."]])
-    arbiter = RealTimeArbiter(board)
-    rook = board.piece_at(Position(0, 0))
-
-    arbiter.start_motion(rook, Position(0, 0), Position(0, 1), duration_ms=1000)
-
-    motion = arbiter.active_motion_from(Position(0, 0))
-    assert motion is not None
-    assert motion.piece_id == rook.id
-
-    assert arbiter.active_motion_from(Position(0, 1)) is None  # nothing departs from there
-
-
-def test_active_motion_from_prefers_the_most_recently_started_motion_for_a_shared_source():
-    # A departs S; before A resolves, B legally moves into the
-    # now-vacated S and is immediately sent off again itself, before A's
-    # own (longer) motion has resolved. Two active motions now share
-    # source=S - active_motion_from(S) should reflect what's actually
-    # happening at S right now (B's motion), not the stale historical
-    # claim (A's).
-    board = Board([["wR", "bN", "."]])
-    arbiter = RealTimeArbiter(board)
-    rook = board.piece_at(Position(0, 0))
-    knight = board.piece_at(Position(0, 1))
-
-    arbiter.start_motion(rook, Position(0, 0), Position(0, 2), duration_ms=1000)  # A: long, still pending
-    arbiter.advance_time(100)
-    arbiter.start_motion(knight, Position(0, 1), Position(0, 0), duration_ms=100)  # B: into S
-    arbiter.advance_time(100)  # B lands on S
-    arbiter.start_motion(knight, Position(0, 0), Position(0, 1), duration_ms=500)  # B departs S again
-
-    motion = arbiter.active_motion_from(Position(0, 0))
-    assert motion.piece_id == knight.id
 
 
 def test_active_motion_for_returns_the_motion_for_that_piece():

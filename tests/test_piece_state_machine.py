@@ -44,7 +44,13 @@ class _FakeLibrary:
 
 
 def piece(id_, state, color="w", kind="Q"):
-    return SimpleNamespace(id=id_, animation_state=state, color=color, kind=kind)
+    return SimpleNamespace(
+        id=id_,
+        is_moving=state == AnimationState.MOVE,
+        is_jumping=state == AnimationState.JUMP,
+        color=color,
+        kind=kind,
+    )
 
 
 def test_engine_reported_move_is_returned_as_is():
@@ -152,14 +158,12 @@ def test_against_the_real_asset_library_move_transitions_through_long_rest_to_id
 
     machine.state_for(wq, clock_ms=0)
     state = machine.state_for(
-        SimpleNamespace(id="wq1", animation_state=AnimationState.IDLE, color=PieceColor.WHITE, kind=PieceKind.QUEEN),
+        piece("wq1", AnimationState.IDLE, color=PieceColor.WHITE, kind=PieceKind.QUEEN),
         clock_ms=10,
     )
     assert state == AnimationState.LONG_REST
 
     # QW/states/long_rest has 5 frames at 6fps -> one cycle is ~833ms
-    idle_snapshot = SimpleNamespace(
-        id="wq1", animation_state=AnimationState.IDLE, color=PieceColor.WHITE, kind=PieceKind.QUEEN
-    )
+    idle_snapshot = piece("wq1", AnimationState.IDLE, color=PieceColor.WHITE, kind=PieceKind.QUEEN)
     state = machine.state_for(idle_snapshot, clock_ms=2000)
     assert state == AnimationState.IDLE
