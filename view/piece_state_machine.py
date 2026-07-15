@@ -13,8 +13,7 @@ from (move -> long_rest -> idle, jump -> short_rest -> idle, idle ->
 idle, for every piece in pieces2/).
 """
 
-from model.piece import AnimationState
-from view.animation_state import derive_animation_state
+from view.animation_state import AnimationState, derive_animation_state
 
 _STATE_BY_VALUE = {state.value: state for state in AnimationState}
 

@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from model.piece import AnimationState
+from view.animation_state import AnimationState
 from view.piece_animator import PieceAnimator
 
 

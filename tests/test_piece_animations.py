@@ -4,7 +4,8 @@ import pytest
 
 import constants
 from assets.piece_animations import AnimationLibrary, frame_index_for, token_to_folder
-from model.piece import AnimationState, PieceColor, PieceKind
+from model.piece import PieceColor, PieceKind
+from view.animation_state import AnimationState
 
 PIECES_DIR_EXISTS = os.path.isdir(constants.PIECES_DIR)
 requires_pieces_dir = pytest.mark.skipif(

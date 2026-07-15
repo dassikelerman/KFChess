@@ -5,7 +5,8 @@ import pytest
 
 import constants
 from assets.piece_animations import AnimationLibrary
-from model.piece import AnimationState, PieceColor, PieceKind
+from model.piece import PieceColor, PieceKind
+from view.animation_state import AnimationState
 from view.piece_state_machine import PieceStateMachine
 
 PIECES_DIR_EXISTS = os.path.isdir(constants.PIECES_DIR)

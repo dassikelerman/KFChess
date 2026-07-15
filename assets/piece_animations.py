@@ -10,7 +10,8 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from model.piece import AnimationState, PieceColor, PieceKind
+from model.piece import PieceColor, PieceKind
+from view.animation_state import AnimationState
 
 
 def token_to_folder(color: PieceColor, kind: PieceKind) -> str:
