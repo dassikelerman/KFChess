@@ -2,6 +2,7 @@ import pytest
 
 from model.board import Board
 from model.game_state import ArrivalEvent, JumpEndedEvent
+from model.piece import PieceColor, PieceKind
 from model.position import Position
 from realtime.real_time_arbiter import RealTimeArbiter
 
@@ -287,10 +288,13 @@ def test_motion_captures_an_enemy_piece_that_landed_on_an_intermediate_cell_and_
         ArrivalEvent(
             piece_id=rook.id, source=Position(0, 0), destination=Position(3, 0),
             captured_piece_id=pawn.id, king_captured=False,
+            piece_kind=PieceKind.ROOK, piece_color=PieceColor.WHITE,
+            captured_kind=PieceKind.PAWN, captured_color=PieceColor.BLACK,
         ),
         ArrivalEvent(
             piece_id=rook.id, source=Position(0, 0), destination=Position(4, 0),
             captured_piece_id=None, king_captured=False,
+            piece_kind=PieceKind.ROOK, piece_color=PieceColor.WHITE,
         ),
     ]
     assert board.piece_at(Position(3, 0)) is None  # the pawn was captured in passing
@@ -321,6 +325,7 @@ def test_motion_stops_short_of_a_friendly_piece_that_landed_on_an_intermediate_c
     assert events == [ArrivalEvent(
         piece_id=rook.id, source=Position(0, 0), destination=Position(2, 0),
         captured_piece_id=None, king_captured=False,
+        piece_kind=PieceKind.ROOK, piece_color=PieceColor.WHITE,
     )]
     assert board.piece_at(Position(2, 0)).id == rook.id
     assert board.piece_at(Position(3, 0)).id == knight.id
@@ -349,6 +354,8 @@ def test_motion_captures_a_king_on_an_intermediate_cell_and_reports_it():
     assert events[0] == ArrivalEvent(
         piece_id=rook.id, source=Position(0, 0), destination=Position(3, 0),
         captured_piece_id=king.id, king_captured=True,
+        piece_kind=PieceKind.ROOK, piece_color=PieceColor.WHITE,
+        captured_kind=PieceKind.KING, captured_color=PieceColor.BLACK,
     )
 
 
@@ -369,6 +376,7 @@ def test_knight_ignores_a_piece_that_landed_along_its_geometric_path():
     assert events == [ArrivalEvent(
         piece_id=knight.id, source=Position(0, 0), destination=Position(2, 1),
         captured_piece_id=None, king_captured=False,
+        piece_kind=PieceKind.KNIGHT, piece_color=PieceColor.WHITE,
     )]
 
 
@@ -383,7 +391,10 @@ def test_advance_time_reports_a_jump_ended_event_when_its_window_elapses():
     arbiter.start_jump(Position(0, 0), end_time=500)
     events = arbiter.advance_time(500)
 
-    assert events == [JumpEndedEvent(piece_id=pawn.id, cell=Position(0, 0))]
+    assert events == [JumpEndedEvent(
+        piece_id=pawn.id, cell=Position(0, 0),
+        piece_kind=PieceKind.PAWN, piece_color=PieceColor.BLACK,
+    )]
     assert not arbiter.is_jumping_on(Position(0, 0))
 
 

@@ -1,6 +1,14 @@
 from dataclasses import replace
 
 from engine.snapshot import GameSnapshot, PieceSnapshot
+from events.game_events import (
+    CaptureEvent,
+    GameOverEvent,
+    JumpCompletedEvent,
+    MotionStoppedEvent,
+    MoveCompletedEvent,
+    PromotionEvent,
+)
 from model.game_state import JumpEndedEvent, MoveResult
 from model.piece import PieceColor, kind_letter, parse_kind
 
@@ -18,6 +26,10 @@ def _captured_token(arrival):
     return "?K" if arrival.king_captured else "??"
 
 
+def _other_color(color):
+    return PieceColor.BLACK if color == PieceColor.WHITE else PieceColor.WHITE
+
+
 class GameEngine:
     def __init__(
         self,
@@ -30,6 +42,7 @@ class GameEngine:
         jump_duration,
         long_rest_duration,
         short_rest_duration,
+        dispatcher=None,
     ):
         if move_duration <= 0:
             raise ValueError("move_duration must be positive")
@@ -51,6 +64,7 @@ class GameEngine:
         self._jump_duration = jump_duration
         self._long_rest_duration = long_rest_duration
         self._short_rest_duration = short_rest_duration
+        self._dispatcher = dispatcher
         self._game_over = False
 
     @property
@@ -124,6 +138,7 @@ class GameEngine:
         for event in events:
             if isinstance(event, JumpEndedEvent):
                 self._arbiter.set_cooldown(event.piece_id, self._short_rest_duration)
+                self._publish_jump_completed(event)
             else:
                 arrivals.append(event)
 
@@ -132,8 +147,14 @@ class GameEngine:
     def _apply_arrivals(self, arrivals):
         for arrival in arrivals:
             if self._win_condition.is_game_over(_captured_token(arrival)):
+                self._publish_action_event(arrival)
                 self._game_over = True
+                self._publish(GameOverEvent(
+                    winner_color=_other_color(arrival.captured_color), at_ms=self.clock,
+                ))
                 return
+
+            self._publish_action_event(arrival)
 
             if arrival.captured_piece_id == arrival.piece_id:
                 continue  # intercepted mid-flight: nothing landed to promote
@@ -147,13 +168,57 @@ class GameEngine:
 
             self._arbiter.set_cooldown(moved.id, self._long_rest_duration)
 
+            before_token = _token(moved)
             promoted_token = self._promotion_rule.promote(
-                _token(moved), arrival.destination.row, self._board.height
+                before_token, arrival.destination.row, self._board.height
             )
             promoted = replace(
                 moved, color=PieceColor(promoted_token[0]), kind=parse_kind(promoted_token[1])
             )
             self._board.add_piece(promoted)
+
+            if promoted_token != before_token:
+                self._publish(PromotionEvent(
+                    piece_id=moved.id, piece_color=promoted.color,
+                    from_kind=moved.kind, to_kind=promoted.kind,
+                    at=arrival.destination, at_ms=self.clock,
+                ))
+
+    # -- Event publishing (side-channel notifications; never affects game state) --
+
+    def _publish_action_event(self, arrival):
+        if self._dispatcher is None or self._game_over:
+            return
+        if arrival.captured_piece_id == arrival.piece_id:
+            self._dispatcher.publish(MotionStoppedEvent(
+                piece_id=arrival.piece_id, piece_kind=arrival.piece_kind,
+                piece_color=arrival.piece_color, at=arrival.destination, at_ms=self.clock,
+            ))
+        elif arrival.captured_piece_id is not None:
+            self._dispatcher.publish(CaptureEvent(
+                piece_id=arrival.piece_id, piece_kind=arrival.piece_kind,
+                piece_color=arrival.piece_color,
+                captured_piece_id=arrival.captured_piece_id,
+                captured_kind=arrival.captured_kind, captured_color=arrival.captured_color,
+                at=arrival.destination, at_ms=self.clock,
+            ))
+        else:
+            self._dispatcher.publish(MoveCompletedEvent(
+                piece_id=arrival.piece_id, piece_kind=arrival.piece_kind,
+                piece_color=arrival.piece_color, destination=arrival.destination, at_ms=self.clock,
+            ))
+
+    def _publish_jump_completed(self, event):
+        if self._dispatcher is None or self._game_over:
+            return
+        self._dispatcher.publish(JumpCompletedEvent(
+            piece_id=event.piece_id, piece_kind=event.piece_kind,
+            piece_color=event.piece_color, cell=event.cell, at_ms=self.clock,
+        ))
+
+    def _publish(self, event):
+        if self._dispatcher is not None:
+            self._dispatcher.publish(event)
 
     # -- Snapshot ---------------------------------------------------------------
 

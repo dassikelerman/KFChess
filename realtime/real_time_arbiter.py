@@ -70,7 +70,10 @@ class RealTimeArbiter:
             if jump.end_time <= new_clock:
                 piece = self._board.piece_at(jump.cell)
                 if piece is not None:
-                    events.append(JumpEndedEvent(piece_id=piece.id, cell=jump.cell))
+                    events.append(JumpEndedEvent(
+                        piece_id=piece.id, cell=jump.cell,
+                        piece_kind=piece.kind, piece_color=piece.color,
+                    ))
 
         # Every arrival/collision due by new_clock is resolved in strict
         # chronological order (never insertion order), recomputed fresh
@@ -180,6 +183,10 @@ class RealTimeArbiter:
             destination=cell,
             captured_piece_id=early.piece.id,
             king_captured=early.piece.kind == PieceKind.KING,
+            piece_kind=late.piece.kind,
+            piece_color=late.piece.color,
+            captured_kind=early.piece.kind,
+            captured_color=early.piece.color,
         )]
 
     def _resolve_encounter(self, motion, cell):
@@ -204,6 +211,10 @@ class RealTimeArbiter:
             destination=cell,
             captured_piece_id=board_piece.id,
             king_captured=board_piece.kind == PieceKind.KING,
+            piece_kind=motion.piece.kind,
+            piece_color=motion.piece.color,
+            captured_kind=board_piece.kind,
+            captured_color=board_piece.color,
         )]
 
     def _self_destroyed_event(self, motion, cell):
@@ -213,6 +224,10 @@ class RealTimeArbiter:
             destination=cell,
             captured_piece_id=motion.piece.id,
             king_captured=motion.piece.kind == PieceKind.KING,
+            piece_kind=motion.piece.kind,
+            piece_color=motion.piece.color,
+            captured_kind=motion.piece.kind,
+            captured_color=motion.piece.color,
         )
 
     def _resolve_arrival(self, motion):
@@ -226,6 +241,10 @@ class RealTimeArbiter:
                 destination=motion.destination,
                 captured_piece_id=piece.id,
                 king_captured=piece.kind == PieceKind.KING,
+                piece_kind=piece.kind,
+                piece_color=piece.color,
+                captured_kind=piece.kind,
+                captured_color=piece.color,
             )
 
         target = self._board.piece_at(motion.destination)
@@ -242,6 +261,8 @@ class RealTimeArbiter:
 
         captured_piece_id = None if target is None else target.id
         king_captured = target is not None and target.kind == PieceKind.KING
+        captured_kind = None if target is None else target.kind
+        captured_color = None if target is None else target.color
 
         self._board.add_piece(replace(piece, cell=motion.destination))
 
@@ -251,6 +272,10 @@ class RealTimeArbiter:
             destination=motion.destination,
             captured_piece_id=captured_piece_id,
             king_captured=king_captured,
+            piece_kind=piece.kind,
+            piece_color=piece.color,
+            captured_kind=captured_kind,
+            captured_color=captured_color,
         )
 
     def _is_intercepted(self, motion, piece):

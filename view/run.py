@@ -11,7 +11,9 @@ import cv2
 import constants
 from app.game_builder import build_game
 from view.piece_animations import AnimationLibrary
+from input.board_mapper import BoardMapper
 from input.controller import Controller
+from view.game_ui_snapshot import build_ui_snapshot
 from view.game_view import GameView
 
 STANDARD_START_BOARD = [
@@ -34,7 +36,15 @@ def run(board_text=None):
     game = build_game(STANDARD_START_BOARD if board_text is None else board_text)
     engine = game.engine
 
-    controller = Controller(engine, game.board_mapper)
+    # The GUI's own click-to-cell mapping needs to know about the side
+    # panels shifting the board right - GameComponents.board_mapper
+    # itself stays offset-free since text mode shares the same
+    # build_game() and has no panels at all.
+    board_mapper = BoardMapper(
+        cell_size=constants.CELL_SIZE, board_width=game.board.width, board_height=game.board.height,
+        x_offset=constants.PANEL_WIDTH,
+    )
+    controller = Controller(engine, board_mapper)
 
     view = GameView(
         constants.BOARD_IMAGE_PATH,
@@ -42,6 +52,7 @@ def run(board_text=None):
         game.board.width,
         game.board.height,
         AnimationLibrary(constants.PIECES_DIR),
+        panel_width=constants.PANEL_WIDTH,
     )
 
     cv2.namedWindow(WINDOW_NAME)
@@ -54,7 +65,8 @@ def run(board_text=None):
         last_tick = now
         engine.wait(dt_ms)
 
-        frame = view.render(engine.snapshot(), engine.clock, controller.selected)
+        ui_snapshot = build_ui_snapshot(engine, controller, game.score_tracker, game.action_history)
+        frame = view.render(ui_snapshot)
         cv2.imshow(WINDOW_NAME, frame.img)
 
         key = cv2.waitKey(FRAME_POLL_MS) & 0xFF
