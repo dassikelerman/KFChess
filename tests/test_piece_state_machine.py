@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 import constants
-from assets.piece_animations import AnimationLibrary
+from view.piece_animations import AnimationLibrary
 from model.piece import PieceColor, PieceKind
 from view.animation_state import AnimationState
 from view.piece_state_machine import PieceStateMachine

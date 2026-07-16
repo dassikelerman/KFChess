@@ -3,7 +3,7 @@ import os
 import pytest
 
 import constants
-from assets.piece_animations import AnimationLibrary, frame_index_for, token_to_folder
+from view.piece_animations import AnimationLibrary, frame_index_for, token_to_folder
 from model.piece import PieceColor, PieceKind
 from view.animation_state import AnimationState
 

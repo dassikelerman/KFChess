@@ -1,7 +1,7 @@
 class PieceAnimator:
     """Tracks, per piece id, how long it's been playing whatever
     AnimationState it's given - a renderer needs the elapsed time to pick
-    the right frame (see assets.piece_animations.frame_index_for). Only
+    the right frame (see view.piece_animations.frame_index_for). Only
     measures; deciding the state itself is PieceStateMachine's job."""
 
     def __init__(self):

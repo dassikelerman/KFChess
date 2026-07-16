@@ -10,7 +10,7 @@ import cv2
 
 import constants
 from app.game_builder import build_game
-from assets.piece_animations import AnimationLibrary
+from view.piece_animations import AnimationLibrary
 from input.controller import Controller
 from view.game_view import GameView
 

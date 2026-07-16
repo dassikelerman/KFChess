@@ -1,6 +1,6 @@
 import numpy as np
 
-from assets.piece_animations import frame_index_for
+from view.piece_animations import frame_index_for
 from view.img import Img
 from view.piece_animator import PieceAnimator
 from view.piece_state_machine import PieceStateMachine
