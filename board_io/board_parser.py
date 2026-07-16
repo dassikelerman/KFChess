@@ -7,7 +7,6 @@ class BoardParseError(Exception):
 
 
 def parse_input(lines):
-    """Split raw input lines into the 'Board:' and 'Commands:' sections."""
     board_lines, commands = [], []
     section = None
     for line in lines:
@@ -25,10 +24,6 @@ def parse_input(lines):
 
 
 def _valid_tokens(colors, empty_token):
-    """Valid tokens are derived from PieceKind - the single source of
-    truth for every piece kind a board token can represent - rather than
-    a hardcoded string.
-    """
     tokens = {empty_token}
     for color in colors:
         for kind in PieceKind:

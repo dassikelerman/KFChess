@@ -126,7 +126,6 @@ def test_pawn_single_step_forward():
 def test_pawn_double_step_requires_clear_path_and_start_row():
     board = empty_board()
     pawn = PawnMovement({"w": -1, "b": 1})
-    # white's start row is one row in front of the back rank (board height 8 -> row 6)
     assert pawn.is_legal(-2, 0, context(board, "w", (6, 4), (4, 4)))
 
     place(board, 5, 4, "bP")
@@ -136,7 +135,6 @@ def test_pawn_double_step_requires_clear_path_and_start_row():
 def test_pawn_cannot_move_two_cells_off_the_start_row():
     board = empty_board()
     pawn = PawnMovement({"w": -1, "b": 1})
-    # row 5 is not white's start row (row 6), even though the path is clear
     assert not pawn.is_legal(-2, 0, context(board, "w", (5, 4), (3, 4)))
 
 
@@ -160,19 +158,17 @@ def test_black_pawn_single_step_forward():
     board = empty_board()
     pawn = PawnMovement({"w": -1, "b": 1})
     assert pawn.is_legal(1, 0, context(board, "b", (1, 4), (2, 4)))
-    assert not pawn.is_legal(-1, 0, context(board, "b", (1, 4), (0, 4)))  # wrong direction
+    assert not pawn.is_legal(-1, 0, context(board, "b", (1, 4), (0, 4)))
 
 
 def test_black_pawn_double_step_requires_clear_path_and_start_row():
     board = empty_board()
     pawn = PawnMovement({"w": -1, "b": 1})
-    # black's start row is one row in front of the back rank (row 1) regardless of board height
     assert pawn.is_legal(2, 0, context(board, "b", (1, 4), (3, 4)))
 
     place(board, 2, 4, "wP")
     assert not pawn.is_legal(2, 0, context(board, "b", (1, 4), (3, 4)))
 
-    # not legal once the pawn is off its start row, even with a clear path
     assert not pawn.is_legal(2, 0, context(board, "b", (2, 4), (4, 4)))
 
 

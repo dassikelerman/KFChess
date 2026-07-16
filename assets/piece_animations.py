@@ -1,11 +1,3 @@
-"""Reads the pieces2/ asset tree into in-memory animation metadata.
-
-Deliberately has no dependency on cv2/pygame - only pathlib/json/
-dataclasses - so it can be unit tested without a display. Actually loading
-sprite pixels into memory is the renderer's job (view/), not this module's;
-AnimationClip only carries file paths.
-"""
-
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,13 +7,9 @@ from view.animation_state import AnimationState
 
 
 def token_to_folder(color: PieceColor, kind: PieceKind) -> str:
-    """Maps the engine's internal piece identity to its pieces2/ asset
-    folder name, e.g. (PieceColor.WHITE, PieceKind.QUEEN) -> "QW".
-
-    This is *not* the same as the engine's own board token (model.piece.
-    kind_letter/_token elsewhere use lowercase color + uppercase kind,
-    e.g. "wQ") - pieces2 folders are <KIND><COLOR>, both uppercase.
-    """
+    # Not the same as the engine's own board token (lowercase color +
+    # uppercase kind, e.g. "wQ") - pieces2 folders are <KIND><COLOR>,
+    # both uppercase, e.g. "QW".
     return kind.value + color.value.upper()
 
 
@@ -45,13 +33,10 @@ class AnimationConfig:
 @dataclass(frozen=True)
 class AnimationClip:
     config: AnimationConfig
-    sprite_paths: list  # list[str] - loading pixels is the renderer's job
+    sprite_paths: list
 
 
 class AnimationLibrary:
-    """Scans pieces_dir once (at construction) and exposes AnimationClip
-    lookup by (color, kind, state)."""
-
     def __init__(self, pieces_dir):
         self._clips = self._scan(Path(pieces_dir))
 

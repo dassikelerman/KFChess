@@ -1,12 +1,4 @@
 class Controller:
-    """Turns raw pixel clicks into board actions.
-
-    Tracks which cell is currently selected across a click pair, and asks
-    the GameEngine to judge/execute the resulting move or jump via
-    request_move()/request_jump(). GameEngine itself never sees a pixel -
-    only Position.
-    """
-
     def __init__(self, game_engine, board_mapper):
         self._game_engine = game_engine
         self._board_mapper = board_mapper
@@ -61,11 +53,10 @@ class Controller:
         board = self._game_engine.board
         piece = board.piece_at(start)
 
-        # The piece originally selected may have been captured (and the
-        # cell taken by a different piece) while it sat waiting for a
-        # second click - e.g. an enemy motion or jump resolving on `start`
-        # in between. Position alone can't tell them apart, so confirm
-        # identity the same way RealTimeArbiter._resolve_arrival does.
+        # The originally selected piece may have been captured (and its
+        # cell taken by a different piece) while waiting for the second
+        # click - Position alone can't tell them apart, so identity is
+        # confirmed the same way RealTimeArbiter._resolve_arrival does.
         if piece is None or piece.id != self._selected_piece_id or self._is_busy(start):
             self._selected = None
             self._selected_piece_id = None
@@ -79,10 +70,8 @@ class Controller:
             return
 
         self._game_engine.request_move(start, pos)
-        # Whether the move was accepted or the target was illegal, the
-        # click pair is over: an illegal target cancels the selection
-        # instead of leaving it open for another attempt - the user must
-        # select the piece again from scratch.
+        # An illegal target cancels the selection rather than leaving it
+        # open for another attempt - the piece must be selected again.
         self._selected = None
         self._selected_piece_id = None
 

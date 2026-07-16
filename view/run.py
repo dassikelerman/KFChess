@@ -1,19 +1,7 @@
-"""Interactive entry point: opens a window and lets two players (one per
-color, sharing one mouse) click pieces to play in real time. Left click
-selects/moves (Controller.click); right click jumps (Controller.jump).
+"""Interactive entry point. Left click selects/moves; right click jumps.
 
-Run from the project root with:
-    python -m view.run
-
-(Must be run as a module, not `python view/run.py` directly - this file
-lives in a subdirectory, so a direct script run would not put the project
-root on sys.path and `import app`/`import constants` would fail.)
-
-Reuses app.build_app() for all the existing game-object wiring (engine,
-board, board_mapper) instead of re-deriving it, and only adds what a real
-interactive session needs on top of that: a second Controller (one per
-color - see view/click_router.py for why two, and how a single mouse's
-clicks are routed between them) and the render loop (view/game_view.py).
+Run as a module from the project root: python -m view.run
+(A direct `python view/run.py` won't put the project root on sys.path.)
 """
 
 import time
@@ -27,9 +15,6 @@ from input.controller import Controller
 from view.click_router import ClickRouter
 from view.game_view import GameView
 
-# Standard chess starting position in this project's own board-text format
-# (see board_io.board_parser.build_board) - row 0 is white's promotion
-# rank (see PAWN_DIRECTION in constants.py), so white's back rank is last.
 STANDARD_START_BOARD = [
     "bR bN bB bQ bK bB bN bR",
     "bP bP bP bP bP bP bP bP",
@@ -43,7 +28,7 @@ STANDARD_START_BOARD = [
 
 WINDOW_NAME = "KungFu Chess"
 ESCAPE_KEY = 27
-FRAME_POLL_MS = 16  # ~60Hz event/GUI polling; the physics clock uses real elapsed time regardless
+FRAME_POLL_MS = 16
 
 
 def run(board_text=None):

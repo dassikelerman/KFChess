@@ -57,20 +57,18 @@ def test_frame_index_for_at_elapsed_zero_is_the_first_frame():
 
 
 def test_frame_index_for_mid_animation():
-    # 10 fps -> 100ms per frame; 250ms in is frame index 2
     clip = _FakeClip(frame_count=5, frames_per_sec=10, is_loop=True)
     assert frame_index_for(clip, elapsed_ms=250) == 2
 
 
 def test_frame_index_for_wraps_when_looping():
-    # 5 frames at 10fps = 500ms per cycle; 700ms in wraps to frame 2
     clip = _FakeClip(frame_count=5, frames_per_sec=10, is_loop=True)
     assert frame_index_for(clip, elapsed_ms=700) == 2
 
 
 def test_frame_index_for_clamps_to_last_frame_when_not_looping():
     clip = _FakeClip(frame_count=5, frames_per_sec=10, is_loop=False)
-    assert frame_index_for(clip, elapsed_ms=10_000) == 4  # way past the end, stays on last frame
+    assert frame_index_for(clip, elapsed_ms=10_000) == 4
 
 
 def test_frame_index_for_non_looping_mid_animation_does_not_clamp_early():

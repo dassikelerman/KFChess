@@ -43,7 +43,7 @@ def test_ensure_covers_passes_when_every_kind_is_registered():
     registry = PieceRuleRegistry()
     for kind in PieceKind:
         registry.register(kind, DummyStrategy())
-    registry.ensure_covers(PieceKind)  # should not raise
+    registry.ensure_covers(PieceKind)
 
 
 def test_ensure_covers_raises_when_a_kind_is_missing():

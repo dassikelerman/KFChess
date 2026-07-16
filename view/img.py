@@ -13,27 +13,6 @@ class Img:
              size: tuple[int, int] | None = None,
              keep_aspect: bool = False,
              interpolation: int = cv2.INTER_AREA) -> "Img":
-        """
-        Load `path` into self.img and optionally resize.
-
-        Parameters
-        ----------
-        path : str | Path
-            Image file to load.
-        size : (width, height) | None
-            Target size in pixels. If None, keep original.
-        keep_aspect : bool
-            - False: resize exactly to `size`
-            - True: shrink so the *longer* side fits `size` while
-              preserving aspect ratio (no cropping).
-        interpolation : OpenCV flag
-            E.g. `cv2.INTER_AREA` for shrink, `cv2.INTER_LINEAR` for enlarge.
-
-        Returns
-        -------
-        Img
-            `self`, so you can chain: `sprite = Img().read("foo.png", (64,64))`
-        """
         path = str(path)
         self.img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
         if self.img is None:
@@ -61,11 +40,10 @@ class Img:
             if self.img.shape[2] == 3 and other_img.img.shape[2] == 4:
                 self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2BGRA)
             elif self.img.shape[2] == 4 and other_img.img.shape[2] == 3:
-                # Give the target an alpha channel instead of stripping
-                # the source's - dropping self.img's alpha here would
-                # throw away its real transparency and paint whatever
-                # raw color sits under the "transparent" pixels (often
-                # black) as fully opaque.
+                # Add an alpha channel to the target instead of stripping
+                # the source's - stripping it would throw away real
+                # transparency and paint whatever raw color sits under
+                # the "transparent" pixels (often black) as opaque.
                 other_img.img = cv2.cvtColor(other_img.img, cv2.COLOR_BGR2BGRA)
 
         h, w = self.img.shape[:2]

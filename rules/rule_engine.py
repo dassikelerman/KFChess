@@ -10,15 +10,6 @@ class MoveValidation:
 
 
 class RuleEngine:
-    """Decides whether a move from source to destination is legal, given
-    the current board state.
-
-    A stateless service: it only reads the board it's given and never
-    mutates anything or moves any piece. That keeps it independent of
-    GameEngine's own turn/timing state (selection, in-flight moves,
-    jumps), so it can be reused or tested on its own.
-    """
-
     def __init__(self, rule_registry):
         self._registry = rule_registry
 
@@ -52,19 +43,13 @@ class UnknownPieceKindError(Exception):
 
 
 class IncompletePieceRuleRegistryError(Exception):
-    """Raised when a registry is missing a MovementStrategy for one or
-    more of the kinds it's expected to cover (see PieceRuleRegistry.ensure_covers)."""
     pass
 
 
 class PieceRuleRegistry:
-    """Maps a PieceKind to its MovementStrategy.
-
-    This is the extension point for movement rules: registering a
-    PieceKind with its own MovementStrategy is all that's needed to
-    support it - no engine or parser code has to change, and the piece
-    automatically becomes a valid board token (see board_io.board_parser).
-    """
+    """Maps a PieceKind to its MovementStrategy - the extension point for
+    movement rules (Strategy pattern): registering a kind with its own
+    strategy is all a new piece kind needs, no engine/parser changes."""
 
     def __init__(self):
         self._strategies = {}
@@ -82,22 +67,12 @@ class PieceRuleRegistry:
         return tuple(self._strategies.keys())
 
     def ensure_covers(self, kinds):
-        """Fail fast if any of `kinds` has no MovementStrategy registered,
-        rather than letting it surface later as an UnknownPieceKindError
-        when a move is attempted.
-        """
         missing = [kind for kind in kinds if kind not in self._strategies]
         if missing:
             raise IncompletePieceRuleRegistryError(missing)
 
 
 def build_default_registry(pawn_direction):
-    """Factory for the standard chess piece set.
-
-    Kept separate from PieceRuleRegistry itself so alternate registries
-    (e.g. for a custom variant) can be assembled the same way without
-    subclassing anything.
-    """
     from model.piece import PieceKind
     from rules.piece_rules import (
         KingMovement,

@@ -1,16 +1,7 @@
-"""A view-side state machine over AnimationState (model/piece.py),
-layering the one-shot rest states (LONG_REST/SHORT_REST) on top of the
-IDLE/MOVE/JUMP derived from GameEngine's logical PieceSnapshot fields
-(see view.animation_state.derive_animation_state) - GameEngine itself
-never produces an AnimationState at all; LONG_REST/SHORT_REST are a
-purely visual concern belonging exclusively to the view.
-
-Driven by the same AnimationLibrary (assets/piece_animations.py) already
-used for rendering: each state's config.json carries its own
-physics.next_state_when_finished, so the transition table isn't
-hardcoded here - it's read from the same data the sprites/frames come
-from (move -> long_rest -> idle, jump -> short_rest -> idle, idle ->
-idle, for every piece in pieces2/).
+"""Layers the one-shot rest states (LONG_REST/SHORT_REST) on top of the
+IDLE/MOVE/JUMP derived from GameEngine's logical PieceSnapshot fields.
+Driven by AnimationLibrary's own next_state_when_finished, so the
+transition table isn't hardcoded here - see docs for the full chain.
 """
 
 from view.animation_state import AnimationState, derive_animation_state
@@ -19,15 +10,6 @@ _STATE_BY_VALUE = {state.value: state for state in AnimationState}
 
 
 class PieceStateMachine:
-    """Tracks, per piece id, its *effective* AnimationState - which may
-    be LONG_REST/SHORT_REST even though the state derived from
-    GameEngine.snapshot() (via derive_animation_state) only ever yields
-    IDLE/MOVE/JUMP.
-
-    No cv2/pygame dependency - just AnimationLibrary lookups and
-    bookkeeping - so it's unit testable without a display.
-    """
-
     def __init__(self, animation_library):
         self._library = animation_library
         self._entries = {}  # piece_id -> (AnimationState, entered_at_ms)
@@ -36,8 +18,6 @@ class PieceStateMachine:
         engine_state = derive_animation_state(piece_snapshot)
 
         if engine_state in (AnimationState.MOVE, AnimationState.JUMP):
-            # The engine's own report is authoritative and immediate - a
-            # piece can't be resting while it's actually moving/jumping.
             self._enter(piece_snapshot.id, engine_state, clock_ms)
             return engine_state
 
@@ -51,14 +31,12 @@ class PieceStateMachine:
             return AnimationState.IDLE
 
         if state in (AnimationState.MOVE, AnimationState.JUMP):
-            # The engine just reported idle right after move/jump - hand
-            # off to whatever that clip's own config says comes next.
+            # Engine just reported idle right after move/jump - hand off
+            # to whatever that clip's own config says comes next.
             state = self._next_state(piece_snapshot, state)
             self._enter(piece_snapshot.id, state, clock_ms)
             return state
 
-        # Resting (long_rest/short_rest): stay until this clip has
-        # played through once, then hand off the same way.
         if self._clip_finished(piece_snapshot, state, clock_ms - entered_at):
             state = self._next_state(piece_snapshot, state)
             self._enter(piece_snapshot.id, state, clock_ms)

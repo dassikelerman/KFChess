@@ -17,7 +17,6 @@ def test_run_reports_parse_error(capsys):
 
 
 def test_dispatch_ignores_blank_command():
-    # An empty command line should not raise, and should produce no command.
     assert parse_script([""]) == []
 
 
@@ -100,7 +99,7 @@ def test_run_ignores_move_commands_after_game_over(capsys):
     ]
     main_module.run(lines)
     rows = capsys.readouterr().out.strip("\n").split("\n")
-    assert "\n".join(rows[:3]) == "\n".join(rows[3:])  # unchanged by the post-game-over clicks
+    assert "\n".join(rows[:3]) == "\n".join(rows[3:])
 
 
 def test_run_move_appears_only_after_enough_accumulated_wait(capsys):

@@ -1,7 +1,3 @@
-"""KungFu Chess - entry point.
-
-Repository: <insert-git-repository-url-here>
-"""
 import sys
 from dataclasses import dataclass
 

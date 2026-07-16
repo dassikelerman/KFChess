@@ -24,12 +24,6 @@ class PrintBoardCommand:
 
 
 def parse(script):
-    """Turn raw script lines ("click X Y", "wait N", ...) into typed
-    Command objects. A thin wrapper around the parts = line.split()
-    shape script_runner.py's predecessor (app._dispatch) used - it
-    doesn't change which commands are supported, just how they're
-    represented.
-    """
     commands = []
     for line in script:
         parts = line.split()

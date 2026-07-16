@@ -3,16 +3,8 @@ from view.animation_state import derive_animation_state
 
 class PieceAnimator:
     """Tracks, per piece id, how long it's been playing its current
-    AnimationState (derived from the piece's logical PieceSnapshot fields
-    - see view.animation_state.derive_animation_state) - purely a
-    view-side concern. GameEngine.snapshot() only reports logical facts
-    (is_moving/is_jumping), not how long a derived animation has been
-    playing; a renderer needs the elapsed time to pick the right frame
-    via assets.piece_animations.frame_index_for.
-
-    No cv2/pygame dependency - just bookkeeping - so it's unit testable
-    without a display.
-    """
+    AnimationState - a renderer needs the elapsed time to pick the right
+    frame (see assets.piece_animations.frame_index_for)."""
 
     def __init__(self):
         self._entered_at = {}  # piece_id -> (AnimationState, clock_ms when it started)

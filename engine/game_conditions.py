@@ -2,16 +2,12 @@ from abc import ABC, abstractmethod
 
 
 class WinCondition(ABC):
-    """Decides whether a capture ends the game (Strategy pattern).
-
-    Swappable so custom variants can define a different win condition
-    (e.g. capture-the-flag, last-piece-standing) without touching the
-    engine.
-    """
+    """Strategy pattern: swappable so a variant can define a different
+    win condition without touching GameEngine."""
 
     @abstractmethod
     def is_game_over(self, captured_piece):
-        """captured_piece is the token that was just captured, or None."""
+        pass
 
 
 class KingCaptureWinCondition(WinCondition):
@@ -20,11 +16,12 @@ class KingCaptureWinCondition(WinCondition):
 
 
 class PromotionRule(ABC):
-    """Decides whether/how a piece transforms after moving (Strategy pattern)."""
+    """Strategy pattern: swappable so a variant can define different
+    promotion rules without touching GameEngine."""
 
     @abstractmethod
     def promote(self, piece, row, board_height):
-        """Return the (possibly unchanged) piece token after promotion rules apply."""
+        pass
 
 
 class LastRankPromotion(PromotionRule):

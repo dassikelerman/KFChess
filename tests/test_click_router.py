@@ -67,59 +67,47 @@ def test_second_click_of_a_gesture_stays_with_the_same_controller_even_over_empt
     rows = [["wR", ".", "."], [".", ".", "."], ["bR", ".", "."]]
     engine, board, white, black, router = make_router(rows)
 
-    router.click(*cell_to_pixel(0, 0))  # white selects its rook
-    router.click(*cell_to_pixel(0, 2))  # completing move over empty space
+    router.click(*cell_to_pixel(0, 0))
+    router.click(*cell_to_pixel(0, 2))
 
-    assert white.selected is None  # move queued, selection cleared
-    assert black.selected is None  # black was never touched
+    assert white.selected is None
+    assert black.selected is None
 
 
 def test_a_click_on_the_other_colors_piece_while_active_completes_the_gesture_as_a_capture():
-    # With one mouse, a click on an enemy piece while a gesture is already
-    # active is indistinguishable from "capture that piece" - there's no
-    # separate signal meaning "actually, start an independent gesture for
-    # the other side instead". The router resolves this by keeping the
-    # whole two-click gesture exclusive system-wide: once a side is
-    # mid-gesture, every following click - including one landing on an
-    # enemy piece - completes *that* gesture, exactly like a normal
-    # capture click would with a single controller.
     rows = [["wR", ".", "."], [".", ".", "."], ["bR", ".", "."]]
     engine, board, white, black, router = make_router(rows)
 
-    router.click(*cell_to_pixel(0, 0))  # white selects its rook
-    router.click(*cell_to_pixel(2, 0))  # click lands on the black rook
+    router.click(*cell_to_pixel(0, 0))
+    router.click(*cell_to_pixel(2, 0))
 
-    assert white.selected is None  # white's move (a capture) was queued
+    assert white.selected is None
     engine.wait(MOVE_DURATION * 2)
-    assert get(board, 2, 0) == "wR"  # captured
-    assert black.selected is None  # black's controller was never invoked
+    assert get(board, 2, 0) == "wR"
+    assert black.selected is None
 
 
 def test_a_click_that_would_be_an_illegal_target_does_not_fall_through_to_the_other_side():
-    # Direct proof of the mutual-exclusion invariant: clicking a black
-    # piece that white's selection can't legally reach is read as an
-    # (illegal) target for white's pending gesture - it never falls
-    # through to start a fresh gesture for black instead.
     rows = [["wR", ".", "."], [".", ".", "."], [".", "bR", "."]]
     engine, board, white, black, router = make_router(rows)
 
-    router.click(*cell_to_pixel(0, 0))  # white selects its rook
-    router.click(*cell_to_pixel(2, 1))  # bR - not reachable by a rook move: illegal target
+    router.click(*cell_to_pixel(0, 0))
+    router.click(*cell_to_pixel(2, 1))
 
-    assert white.selected is None  # cancelled, same as any illegal target
-    assert black.selected is None  # black's controller was never invoked
+    assert white.selected is None
+    assert black.selected is None
 
 
 def test_illegal_target_cancels_the_gesture_and_frees_the_router():
     rows = [["wR", ".", "."], [".", "bR", "."], [".", ".", "."]]
     engine, board, white, black, router = make_router(rows)
 
-    router.click(*cell_to_pixel(0, 0))  # white selects its rook
-    router.click(*cell_to_pixel(1, 1))  # diagonal - illegal for a rook, selection cancelled
+    router.click(*cell_to_pixel(0, 0))
+    router.click(*cell_to_pixel(1, 1))
 
-    assert white.selected is None  # cancelled, not kept open
+    assert white.selected is None
 
-    router.click(*cell_to_pixel(0, 0))  # must select again from scratch
+    router.click(*cell_to_pixel(0, 0))
     assert white.selected == (0, 0)
 
 
@@ -127,11 +115,11 @@ def test_after_an_illegal_target_the_next_click_can_route_to_the_other_side():
     rows = [["wR", ".", "."], [".", ".", "."], [".", "bR", "."]]
     engine, board, white, black, router = make_router(rows)
 
-    router.click(*cell_to_pixel(0, 0))  # white selects its rook
-    router.click(*cell_to_pixel(2, 1))  # bR - not reachable by a rook move: illegal, cancelled
+    router.click(*cell_to_pixel(0, 0))
+    router.click(*cell_to_pixel(2, 1))
     assert white.selected is None
 
-    router.click(*cell_to_pixel(2, 1))  # now read as a fresh click - selects black's rook
+    router.click(*cell_to_pixel(2, 1))
     assert black.selected == (2, 1)
 
 
@@ -139,7 +127,7 @@ def test_click_on_empty_cell_with_nobody_active_is_a_no_op():
     rows = [["wR", ".", "."], [".", ".", "."], ["bR", ".", "."]]
     engine, board, white, black, router = make_router(rows)
 
-    router.click(*cell_to_pixel(1, 1))  # empty cell, nothing selected anywhere
+    router.click(*cell_to_pixel(1, 1))
 
     assert white.selected is None
     assert black.selected is None
@@ -149,10 +137,10 @@ def test_after_a_completed_gesture_the_next_click_can_route_to_the_other_side():
     rows = [["wR", ".", "."], [".", ".", "."], ["bR", ".", "."]]
     engine, board, white, black, router = make_router(rows)
 
-    router.click(*cell_to_pixel(0, 0))  # white selects
-    router.click(*cell_to_pixel(0, 1))  # white's move completes
+    router.click(*cell_to_pixel(0, 0))
+    router.click(*cell_to_pixel(0, 1))
 
-    router.click(*cell_to_pixel(2, 0))  # fresh gesture: black's rook
+    router.click(*cell_to_pixel(2, 0))
 
     assert black.selected == (2, 0)
     assert white.selected is None
@@ -183,7 +171,7 @@ def test_jump_on_empty_cell_is_a_no_op():
     rows = [["wR", ".", "."], [".", ".", "."], ["bR", ".", "."]]
     engine, board, white, black, router = make_router(rows)
 
-    router.jump(*cell_to_pixel(1, 1))  # nothing there
+    router.jump(*cell_to_pixel(1, 1))
 
     assert white.selected is None
     assert black.selected is None
@@ -194,26 +182,26 @@ def test_jump_does_not_disturb_an_unrelated_active_gesture_on_the_other_side():
     rows = [["wR", ".", "."], [".", ".", "."], ["bR", ".", "."]]
     engine, board, white, black, router = make_router(rows)
 
-    router.click(*cell_to_pixel(0, 0))  # white mid-gesture
+    router.click(*cell_to_pixel(0, 0))
     assert white.selected == (0, 0)
 
-    router.jump(*cell_to_pixel(2, 0))  # right-click jump on black's rook
+    router.jump(*cell_to_pixel(2, 0))
 
     assert engine.arbiter.is_jumping_on(Position(2, 0))
-    assert white.selected == (0, 0)  # white's pending gesture is untouched
+    assert white.selected == (0, 0)
 
 
 def test_jump_on_the_active_side_clears_its_pending_gesture():
     rows = [["wR", "wB", "."], [".", ".", "."], ["bR", ".", "."]]
     engine, board, white, black, router = make_router(rows)
 
-    router.click(*cell_to_pixel(0, 0))  # white selects its rook
+    router.click(*cell_to_pixel(0, 0))
     assert white.selected == (0, 0)
 
-    router.jump(*cell_to_pixel(0, 1))  # white right-clicks jump on a different white piece
+    router.jump(*cell_to_pixel(0, 1))
 
     assert engine.arbiter.is_jumping_on(Position(0, 1))
-    assert white.selected is None  # Controller.jump() clears its own selection
+    assert white.selected is None
 
-    router.click(*cell_to_pixel(2, 0))  # router is free again - routes fresh to black
+    router.click(*cell_to_pixel(2, 0))
     assert black.selected == (2, 0)

@@ -2,12 +2,9 @@ from texttests.script_parser import ClickCommand, JumpCommand, PrintBoardCommand
 
 
 class ScriptRunner:
-    """Executes parsed Command objects against exactly the public APIs a
-    real UI would use - Controller for clicks/jumps, GameEngine for
-    waiting/snapshotting, BoardPrinter for rendering. No other access to
-    engine internals, so a script run here exercises the same surface a
-    click-driven UI does.
-    """
+    """Drives Controller/GameEngine/BoardPrinter through exactly the
+    public API a real UI would use, so a script run here exercises the
+    same surface a click-driven UI does."""
 
     def __init__(self, controller, game_engine, board_printer):
         self._controller = controller

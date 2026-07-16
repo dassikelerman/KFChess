@@ -2,12 +2,6 @@ from model.piece import kind_letter
 
 
 class BoardPrinter:
-    """Turns a GameSnapshot into printable text - the same text format
-    the board's own token grid always produced ("wK"/"." rows joined by
-    spaces/newlines), just built from PieceSnapshot data instead of
-    talking to Board/GameEngine directly.
-    """
-
     def __init__(self, empty_token="."):
         self._empty_token = empty_token
 

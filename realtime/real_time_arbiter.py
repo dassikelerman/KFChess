@@ -6,22 +6,6 @@ from realtime.motion import Jump, Motion
 
 
 class RealTimeArbiter:
-    """Owns real-time state: in-flight motions, active jumps, and the
-    clock driving them.
-
-    A jump intercepting a move is a single, tightly coupled mechanism, so
-    both continue to live together here rather than being split across
-    files. This is a mechanical service: it mutates the board it's given
-    and reports what arrived via ArrivalEvents, but never decides what an
-    arrival *means* (game over, promotion) - that's left to the caller.
-
-    A piece leaves the Board the instant its Motion starts (see
-    start_motion) and travels only as data on that Motion until it lands
-    - nothing on the Board itself is "moving". advance_time() resolves,
-    in strict chronological order, both final arrivals and in-transit
-    collisions between motions whose paths cross (see Motion.path_cells).
-    """
-
     def __init__(self, board):
         self._board = board
         self._clock = 0
@@ -34,21 +18,12 @@ class RealTimeArbiter:
         return self._clock
 
     def is_resting(self, piece_id):
-        """Whether this piece is currently in a post-move/post-jump
-        cooldown (see GameEngine's long/short rest handling) and can't
-        act again yet. Purely a time comparison - callers set the
-        cooldown itself via set_cooldown()."""
         return self.rest_remaining_fraction(piece_id) is not None
 
     def set_cooldown(self, piece_id, duration_ms):
         self._cooldowns[piece_id] = (self._clock, self._clock + duration_ms)
 
     def rest_remaining_fraction(self, piece_id):
-        """How much of this piece's current rest is still left, as a
-        fraction from 1.0 (just started resting) down to just above 0.0
-        (about to finish) - or None if it isn't resting at all. Purely
-        for rendering a fading cooldown indicator; game rules only ever
-        need the boolean is_resting()."""
         entry = self._cooldowns.get(piece_id)
         if entry is None:
             return None
@@ -61,44 +36,24 @@ class RealTimeArbiter:
         return (end_time - self._clock) / total
 
     def active_jumps(self):
-        """A read-only snapshot of every currently active jump - lets a
-        caller (GameEngine) see which ones are about to expire in an
-        upcoming advance_time() call, before that call silently drops
-        them from _active_jumps."""
         return list(self._active_jumps)
 
     def is_jumping_on(self, cell):
         return any(jump.cell == cell for jump in self._active_jumps)
 
     def active_motion_for(self, piece_id):
-        """The Motion currently in flight for this piece, or None -
-        read-only lookup by identity, for callers like GameEngine.
-        snapshot() that need to render a specific piece's progress
-        without reaching into _active_motions."""
         return next((m for m in self._active_motions if m.piece_id == piece_id), None)
 
     def active_motions(self):
-        """A read-only snapshot of every currently in-flight motion - a
-        piece leaves the Board entirely the instant its motion starts
-        (see start_motion), so callers like GameEngine.snapshot() need
-        this to know which pieces exist at all right now beyond what
-        board.pieces() alone would show."""
         return list(self._active_motions)
 
     def active_jump_for(self, cell):
-        """The Jump currently guarding this cell, or None - Jump is
-        deliberately cell-based rather than tied to a piece's identity
-        (see is_jumping_on), so this is keyed by cell too."""
         return next((j for j in self._active_jumps if j.cell == cell), None)
 
     def start_motion(self, piece, source, destination, duration_ms):
         start_time = self._clock
         arrival_time = self._clock + duration_ms
         self._active_motions.append(Motion(piece, source, destination, start_time, arrival_time))
-        # The piece leaves its source cell the instant the motion is
-        # queued - it travels as data on the Motion, not as a Board
-        # occupant, so nothing can capture or block it at its old cell
-        # while it's airborne (see Motion's own docstring).
         self._board.remove_piece(piece)
 
     def start_jump(self, cell, end_time):
@@ -111,15 +66,10 @@ class RealTimeArbiter:
         new_clock = self._clock + ms
         events = []
 
-        # Resolve every arrival and in-transit collision due by new_clock,
-        # strictly in chronological order - never by insertion order or
-        # frame-to-frame call granularity - so the outcome is identical
-        # whether this is one big advance_time() call or several small
-        # ones covering the same total span. Each processed event can
-        # change what's still active (an arrival removes a motion; a
-        # collision removes or truncates one), so the next event is
-        # recomputed from scratch every iteration rather than planned
-        # upfront.
+        # Every arrival/collision due by new_clock is resolved in strict
+        # chronological order (never insertion order), recomputed fresh
+        # each iteration since resolving one can change what's next -
+        # this makes the outcome independent of the wait() call granularity.
         while True:
             outcome = self._next_event(new_clock)
             if outcome is None:
@@ -171,11 +121,6 @@ class RealTimeArbiter:
         return time, cell
 
     def _resolve_collision(self, motion_a, motion_b, cell):
-        # One (or both) side of this pairing may have already been
-        # resolved or truncated by an earlier event processed in this
-        # same advance_time() call (e.g. one of them already collided
-        # with a third motion first) - if so, this candidate is stale
-        # and simply dropped; _next_event() recomputes fresh each time.
         if motion_a not in self._active_motions or motion_b not in self._active_motions:
             return []
 
@@ -188,25 +133,18 @@ class RealTimeArbiter:
                 motion_a.truncate_before(cell)
                 motion_b.truncate_before(cell)
                 return []
-            # Exact simultaneous meeting between enemies: there's no
-            # well-defined "who got there first" to decide a winner, so
-            # neither survives - a documented, deterministic policy (see
-            # tests) rather than an arbitrary tie-break.
+            # Exact simultaneous meeting between enemies: no well-defined
+            # winner, so neither survives - a documented, deterministic
+            # policy rather than an arbitrary tie-break (see tests).
             self._active_motions.remove(motion_a)
             self._active_motions.remove(motion_b)
             return [self._self_destroyed_event(motion_a, cell), self._self_destroyed_event(motion_b, cell)]
 
         early, late = (motion_a, motion_b) if time_a < time_b else (motion_b, motion_a)
         if same_color:
-            # The earlier motion already claimed this cell and continues
-            # untouched; the later one can't pass through/land on a
-            # friendly claim, so it stops one cell short instead.
             late.truncate_before(cell)
             return []
 
-        # Different colors: whichever motion reaches the shared cell
-        # later captures the one that was already there, and continues
-        # on to its own original destination.
         self._active_motions.remove(early)
         return [ArrivalEvent(
             piece_id=late.piece.id,
@@ -240,16 +178,10 @@ class RealTimeArbiter:
 
         target = self._board.piece_at(motion.destination)
         if target is not None and target.color == piece.color:
-            # A stationary friendly piece here would already have failed
-            # RuleEngine validation before this motion was ever queued -
-            # so this can only be another (now-resolved) motion that beat
-            # this one to their shared destination with a *different*
-            # arrival time (an exact tie is caught earlier, in
-            # _resolve_collision, before either side gets here). This is
-            # the same "can't land on a friendly claim" situation as an
-            # in-transit collision, just realized one step later than
-            # usual: stop one cell short and let the next loop iteration
-            # resolve the (now shorter, already-due) motion for real.
+            # Can only happen when a different motion beat this one to
+            # their shared destination with a different arrival time (an
+            # exact tie is already caught in _resolve_collision) - stop
+            # one cell short, same as an in-transit collision.
             if motion.destination == motion.source:
                 return None  # nowhere shorter to go - it never arrives
             motion.truncate_before(motion.destination)
@@ -270,11 +202,8 @@ class RealTimeArbiter:
         )
 
     def _is_intercepted(self, motion, piece):
-        # A jump only intercepts if the cell it guards is still actually
-        # defended by *some* piece - an empty guarded cell (e.g. left
-        # behind if its defender is ever removed some other way) must not
-        # intercept everything indiscriminately, which unguarded None !=
-        # piece.color would otherwise do.
+        # An empty guarded cell must not intercept indiscriminately -
+        # only a jump still actually defended by some piece counts.
         return any(
             jump.cell == motion.destination and self._piece_color(jump.cell) not in (None, piece.color)
             for jump in self._active_jumps

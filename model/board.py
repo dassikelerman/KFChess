@@ -5,12 +5,6 @@ from model.position import Position
 
 
 class Board:
-    """Stores each cell as a typed Piece (or nothing), keyed by Position.
-
-    Game logic talks to Piece/Position objects instead of "wK"/"." strings.
-    snapshot() still renders the same text tokens for callers that need them.
-    """
-
     def __init__(self, rows=(), empty_token="."):
         self._height = len(rows)
         self._width = len(rows[0]) if rows else 0

@@ -5,16 +5,9 @@ from view.animation_state import derive_animation_state
 from view.img import Img
 from view.piece_animator import PieceAnimator
 
-# A cooldown tint covering a resting piece's whole cell, edge to edge -
-# drawn *on top of* the piece itself (not hidden underneath it) so it's
-# clearly visible, plus a stronger border so the cell's boundary reads
-# unmistakably even where the fill blends into the board's own color.
-# Full strength the instant a rest starts, fading linearly to nothing by
-# the time PieceSnapshot.rest_fraction_remaining reaches 0. A short rest
-# fades out quickly, a long rest slowly, purely because that fraction is
-# already normalized against each rest's own actual duration (see
-# RealTimeArbiter.rest_remaining_fraction) - no separate speed setting
-# needed here.
+# Fraction is normalized against each rest's own duration (see
+# RealTimeArbiter.rest_remaining_fraction), so a short rest fades out
+# quickly and a long rest slowly with no separate speed setting needed.
 REST_OVERLAY_COLOR_BGR = (230, 160, 90)
 REST_OVERLAY_FILL_MAX_ALPHA = 0.55
 REST_OVERLAY_BORDER_MAX_ALPHA = 0.9
@@ -22,11 +15,6 @@ REST_OVERLAY_BORDER_THICKNESS = 6
 
 
 class GameView:
-    """Renders a GameSnapshot onto a fresh copy of the board image each
-    frame - the board picture and every sprite frame are loaded once and
-    cached, since render() runs every frame in the game loop.
-    """
-
     def __init__(self, board_image_path, cell_size, board_width, board_height, animation_library):
         self._cell_size = cell_size
         self._library = animation_library
@@ -41,8 +29,8 @@ class GameView:
         canvas.img = self._board_image.img.copy()
         for piece in snapshot.pieces:
             self._draw_piece(canvas, piece, clock_ms)
-        # Drawn as its own pass, after every piece, so the tint sits on
-        # top of the sprite instead of being hidden underneath it.
+        # Own pass after every piece, so the tint sits on top of the
+        # sprite instead of being hidden underneath it.
         for piece in snapshot.pieces:
             self._draw_rest_overlay(canvas, piece)
         return canvas
