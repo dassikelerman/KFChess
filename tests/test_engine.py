@@ -525,6 +525,29 @@ def test_jump_on_empty_cell_is_ignored():
     assert get(board, 0, 1) == "wR"
 
 
+def test_jump_clears_a_pending_selection_even_when_targeting_a_different_colored_piece():
+    # A single shared Controller has no per-color isolation, so a jump
+    # anywhere - even on the opposing color's piece - clears whatever
+    # selection is currently pending, same as jumping on its own piece.
+    engine, controller, board = make_engine([["wR", ".", "."], [".", ".", "."], ["bR", ".", "."]])
+    controller.click(*cell_to_pixel(0, 0))
+    assert controller.selected == (0, 0)
+
+    controller.jump(*cell_to_pixel(2, 0))
+
+    assert controller.selected is None
+
+
+def test_jump_clears_a_pending_selection_even_on_an_empty_cell():
+    engine, controller, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
+    controller.click(*cell_to_pixel(0, 0))
+    assert controller.selected == (0, 0)
+
+    controller.jump(*cell_to_pixel(1, 1))
+
+    assert controller.selected is None
+
+
 def test_king_intercepted_by_jump_ends_the_game():
     rows = [["wK", ".", "."], ["bP", ".", "."], [".", ".", "."]]
     engine, controller, board = make_engine(rows)

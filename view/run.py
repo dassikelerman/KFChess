@@ -12,7 +12,6 @@ import constants
 from app.game_builder import build_game
 from assets.piece_animations import AnimationLibrary
 from input.controller import Controller
-from view.click_router import ClickRouter
 from view.game_view import GameView
 
 STANDARD_START_BOARD = [
@@ -35,9 +34,7 @@ def run(board_text=None):
     game = build_game(STANDARD_START_BOARD if board_text is None else board_text)
     engine = game.engine
 
-    controller_white = Controller(engine, game.board_mapper)
-    controller_black = Controller(engine, game.board_mapper)
-    router = ClickRouter(engine, game.board_mapper, controller_white, controller_black)
+    controller = Controller(engine, game.board_mapper)
 
     view = GameView(
         constants.BOARD_IMAGE_PATH,
@@ -48,7 +45,7 @@ def run(board_text=None):
     )
 
     cv2.namedWindow(WINDOW_NAME)
-    cv2.setMouseCallback(WINDOW_NAME, lambda event, x, y, flags, userdata: _on_mouse(router, event, x, y))
+    cv2.setMouseCallback(WINDOW_NAME, lambda event, x, y, flags, userdata: _on_mouse(controller, event, x, y))
 
     last_tick = time.perf_counter()
     while True:
@@ -70,11 +67,11 @@ def run(board_text=None):
     cv2.destroyAllWindows()
 
 
-def _on_mouse(router, event, x, y):
+def _on_mouse(controller, event, x, y):
     if event == cv2.EVENT_LBUTTONDOWN:
-        router.click(x, y)
+        controller.click(x, y)
     elif event == cv2.EVENT_RBUTTONDOWN:
-        router.jump(x, y)
+        controller.jump(x, y)
 
 
 if __name__ == "__main__":
