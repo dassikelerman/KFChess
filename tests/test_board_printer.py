@@ -1,5 +1,5 @@
 from board_io.board_printer import BoardPrinter
-from model.game_state import GameSnapshot, PieceSnapshot
+from engine.snapshot import GameSnapshot, PieceSnapshot
 from model.piece import PieceColor, PieceKind
 
 

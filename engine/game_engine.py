@@ -1,6 +1,7 @@
 from dataclasses import replace
 
-from model.game_state import GameSnapshot, JumpEndedEvent, MoveResult, PieceSnapshot
+from engine.snapshot import GameSnapshot, PieceSnapshot
+from model.game_state import JumpEndedEvent, MoveResult
 from model.piece import PieceColor, kind_letter, parse_kind
 
 

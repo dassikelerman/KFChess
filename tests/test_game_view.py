@@ -5,7 +5,7 @@ import pytest
 
 import constants
 from assets.piece_animations import AnimationLibrary
-from model.game_state import PieceSnapshot
+from engine.snapshot import PieceSnapshot
 from model.piece import PieceColor, PieceKind
 from view.game_view import GameView
 
