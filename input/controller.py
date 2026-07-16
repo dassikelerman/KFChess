@@ -76,4 +76,4 @@ class Controller:
         self._selected_piece_id = None
 
     def _is_busy(self, pos):
-        return self._game_engine.is_position_busy(pos)
+        return self._game_engine.is_busy(pos)

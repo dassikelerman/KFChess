@@ -8,13 +8,13 @@ def _token(piece):
     return piece.color.value + kind_letter(piece.kind)
 
 
-def _captured_token(event):
+def _captured_token(arrival):
     # The real captured piece is already gone from the board by the time
     # an ArrivalEvent is reported, so this is just enough of a fake token
     # (kind character only) for WinCondition.is_game_over() to read.
-    if event.captured_piece_id is None:
+    if arrival.captured_piece_id is None:
         return None
-    return "?K" if event.king_captured else "??"
+    return "?K" if arrival.king_captured else "??"
 
 
 class GameEngine:
@@ -68,6 +68,8 @@ class GameEngine:
     def arbiter(self):
         return self._arbiter
 
+    # -- Moves ----------------------------------------------------------------
+
     def request_move(self, source, destination):
         if self._game_over:
             return MoveResult(False, "game_over")
@@ -88,14 +90,16 @@ class GameEngine:
         self._arbiter.start_motion(piece, source, destination, duration_ms)
         return MoveResult(True, "ok")
 
-    def is_position_busy(self, position):
+    # -- Jumps ------------------------------------------------------------------
+
+    def is_busy(self, position):
         return self._arbiter.is_jumping_on(position)
 
     def request_jump(self, position):
         if self._game_over:
             return MoveResult(False, "game_over")
 
-        if self.is_position_busy(position):
+        if self.is_busy(position):
             return
 
         piece = self._board.piece_at(position)
@@ -108,8 +112,50 @@ class GameEngine:
         end_time = self._arbiter.clock + self._jump_duration
         self._arbiter.start_jump(position, end_time)
 
-    def wait(self, dt):
-        self._advance(dt)
+    # -- Event handling -----------------------------------------------------
+
+    def wait(self, ms):
+        self._advance(ms)
+
+    def _advance(self, ms):
+        events = self._arbiter.advance_time(ms)
+
+        arrivals = []
+        for event in events:
+            if isinstance(event, JumpEndedEvent):
+                self._arbiter.set_cooldown(event.piece_id, self._short_rest_duration)
+            else:
+                arrivals.append(event)
+
+        self._apply_arrivals(arrivals)
+
+    def _apply_arrivals(self, arrivals):
+        for arrival in arrivals:
+            if self._win_condition.is_game_over(_captured_token(arrival)):
+                self._game_over = True
+                return
+
+            if arrival.captured_piece_id == arrival.piece_id:
+                continue  # intercepted mid-flight: nothing landed to promote
+
+            moved = self._board.piece_at(arrival.destination)
+            if moved is None or moved.id != arrival.piece_id:
+                # destination was overwritten by a later event in this same
+                # batch before this one was processed - nothing of this
+                # piece is left here to promote or rest.
+                continue
+
+            self._arbiter.set_cooldown(moved.id, self._long_rest_duration)
+
+            promoted_token = self._promotion_rule.promote(
+                _token(moved), arrival.destination.row, self._board.height
+            )
+            promoted = replace(
+                moved, color=PieceColor(promoted_token[0]), kind=parse_kind(promoted_token[1])
+            )
+            self._board.add_piece(promoted)
+
+    # -- Snapshot ---------------------------------------------------------------
 
     def snapshot(self):
         pieces = [self._settled_piece_snapshot(piece) for piece in self._board.pieces()]
@@ -120,8 +166,6 @@ class GameEngine:
             pieces=pieces,
             game_over=self._game_over,
         )
-
-    # -- internal helpers -------------------------------------------------
 
     def _settled_piece_snapshot(self, piece):
         return PieceSnapshot(
@@ -158,41 +202,3 @@ class GameEngine:
         row = motion.source.row + (motion.destination.row - motion.source.row) * progress
         col = motion.source.col + (motion.destination.col - motion.source.col) * progress
         return row, col
-
-    def _advance(self, ms):
-        events = self._arbiter.advance_time(ms)
-
-        arrival_events = []
-        for event in events:
-            if isinstance(event, JumpEndedEvent):
-                self._arbiter.set_cooldown(event.piece_id, self._short_rest_duration)
-            else:
-                arrival_events.append(event)
-
-        self._apply_events(arrival_events)
-
-    def _apply_events(self, events):
-        for event in events:
-            if self._win_condition.is_game_over(_captured_token(event)):
-                self._game_over = True
-                return
-
-            if event.captured_piece_id == event.piece_id:
-                continue  # intercepted mid-flight: nothing landed to promote
-
-            moved = self._board.piece_at(event.destination)
-            if moved is None or moved.id != event.piece_id:
-                # destination was overwritten by a later event in this same
-                # batch before this one was processed - nothing of this
-                # piece is left here to promote or rest.
-                continue
-
-            self._arbiter.set_cooldown(moved.id, self._long_rest_duration)
-
-            promoted_token = self._promotion_rule.promote(
-                _token(moved), event.destination.row, self._board.height
-            )
-            promoted = replace(
-                moved, color=PieceColor(promoted_token[0]), kind=parse_kind(promoted_token[1])
-            )
-            self._board.add_piece(promoted)

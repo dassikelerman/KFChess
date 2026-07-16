@@ -541,13 +541,13 @@ def test_king_intercepted_by_jump_ends_the_game():
 def test_request_jump_directly_starts_a_jump():
     engine, controller, board = make_engine([["wR", "bP"], [".", "."]])
     engine.request_jump(Position(0, 0))
-    assert engine.is_position_busy(Position(0, 0)) is True
+    assert engine.is_busy(Position(0, 0)) is True
 
 
 def test_request_jump_on_empty_cell_is_ignored():
     engine, controller, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
     engine.request_jump(Position(0, 1))
-    assert engine.is_position_busy(Position(0, 1)) is False
+    assert engine.is_busy(Position(0, 1)) is False
 
 
 def test_request_jump_on_busy_cell_is_ignored():
@@ -561,20 +561,20 @@ def test_request_jump_on_busy_cell_is_ignored():
     assert get(board, 0, 2) == "wR"
 
 
-def test_is_position_busy_is_not_set_by_a_departed_motions_old_cell():
+def test_is_busy_is_not_set_by_a_departed_motions_old_cell():
     engine, controller, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
-    assert engine.is_position_busy(Position(0, 0)) is False
+    assert engine.is_busy(Position(0, 0)) is False
 
     engine.request_move(Position(0, 0), Position(0, 2))
-    assert engine.is_position_busy(Position(0, 0)) is False
+    assert engine.is_busy(Position(0, 0)) is False
 
 
-def test_is_position_busy_reflects_active_jump():
+def test_is_busy_reflects_active_jump():
     engine, controller, board = make_engine([["wR", ".", "."], [".", ".", "."], [".", ".", "."]])
-    assert engine.is_position_busy(Position(0, 0)) is False
+    assert engine.is_busy(Position(0, 0)) is False
 
     engine.request_jump(Position(0, 0))
-    assert engine.is_position_busy(Position(0, 0)) is True
+    assert engine.is_busy(Position(0, 0)) is True
 
 
 def test_pawn_promotion_on_arrival():

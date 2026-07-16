@@ -17,6 +17,8 @@ class RealTimeArbiter:
     def clock(self):
         return self._clock
 
+    # -- Cooldown ---------------------------------------------------------------
+
     def is_resting(self, piece_id):
         return self.rest_remaining_fraction(piece_id) is not None
 
@@ -36,11 +38,15 @@ class RealTimeArbiter:
             return 0.0
         return (end_time - self._clock) / total
 
+    # -- Queries ------------------------------------------------------------
+
     def is_jumping_on(self, cell):
         return any(jump.cell == cell for jump in self._active_jumps)
 
     def active_motions(self):
         return list(self._active_motions)
+
+    # -- Actions ------------------------------------------------------------
 
     def start_motion(self, piece, source, destination, duration_ms):
         start_time = self._clock
@@ -50,6 +56,8 @@ class RealTimeArbiter:
 
     def start_jump(self, cell, end_time):
         self._active_jumps.append(Jump(cell, end_time))
+
+    # -- Event handling -----------------------------------------------------
 
     def advance_time(self, ms):
         if ms < 0:
