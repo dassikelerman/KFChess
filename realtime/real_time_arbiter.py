@@ -84,9 +84,12 @@ class RealTimeArbiter:
                 event = self._resolve_arrival(outcome[1])
                 if event is not None:
                     events.append(event)
-            else:
+            elif outcome[0] == "collision":
                 _, motion_a, motion_b, cell = outcome
                 events.extend(self._resolve_collision(motion_a, motion_b, cell))
+            else:
+                _, motion, cell = outcome
+                events.extend(self._resolve_encounter(motion, cell))
 
         self._clock = new_clock
         self._active_jumps = [j for j in self._active_jumps if self._clock < j.end_time]
@@ -107,6 +110,25 @@ class RealTimeArbiter:
                 if time <= new_clock:
                     tie_key = tuple(sorted((motion_a.piece_id, motion_b.piece_id)))
                     candidates.append((time, 0, tie_key, ("collision", motion_a, motion_b, cell)))
+
+        # A motion can reach a cell that isn't its own final destination
+        # (handled separately by _resolve_arrival) but that a *different*
+        # motion has, by now, already landed on and left the Board - e.g.
+        # a rook flying toward a pawn's old cell while that pawn has since
+        # stepped into the rook's path. Only non-destination path cells
+        # are checked here; a stationary piece already sitting there when
+        # the motion was queued would have failed path-clearing validation
+        # up front, so this only ever fires for a cell that became
+        # occupied after the motion was already in flight.
+        for motion in self._active_motions:
+            for cell in motion.path_cells()[:-1]:
+                board_piece = self._board.piece_at(cell)
+                if board_piece is None:
+                    continue
+                time = motion.time_at_cell(cell)
+                if time <= new_clock:
+                    tie_key = (motion.piece_id, board_piece.id)
+                    candidates.append((time, 0, tie_key, ("encounter", motion, cell)))
 
         if not candidates:
             return None
@@ -158,6 +180,30 @@ class RealTimeArbiter:
             destination=cell,
             captured_piece_id=early.piece.id,
             king_captured=early.piece.kind == PieceKind.KING,
+        )]
+
+    def _resolve_encounter(self, motion, cell):
+        # Re-checked fresh here (not passed in from the candidate) since an
+        # earlier event resolved earlier in this same advance_time() call
+        # may have already changed what's on `cell`, or removed `motion`
+        # itself from play.
+        if motion not in self._active_motions:
+            return []
+        board_piece = self._board.piece_at(cell)
+        if board_piece is None:
+            return []
+
+        if board_piece.color == motion.piece.color:
+            motion.truncate_before(cell)
+            return []
+
+        self._board.remove_piece(board_piece)
+        return [ArrivalEvent(
+            piece_id=motion.piece_id,
+            source=motion.source,
+            destination=cell,
+            captured_piece_id=board_piece.id,
+            king_captured=board_piece.kind == PieceKind.KING,
         )]
 
     def _self_destroyed_event(self, motion, cell):

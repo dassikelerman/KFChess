@@ -1,7 +1,7 @@
 import pytest
 
 from model.board import Board
-from model.game_state import JumpEndedEvent
+from model.game_state import ArrivalEvent, JumpEndedEvent
 from model.position import Position
 from realtime.real_time_arbiter import RealTimeArbiter
 
@@ -254,6 +254,122 @@ def test_same_result_for_one_big_wait_as_for_several_small_waits():
         arbiter_b.advance_time(100)
 
     assert board_a.snapshot() == board_b.snapshot()
+
+
+# -- motion vs. a piece that landed mid-path ---------------------------------
+
+
+def test_motion_captures_an_enemy_piece_that_landed_on_an_intermediate_cell_and_continues():
+    # A rook flies the length of a column toward a pawn's cell; while it's
+    # still in flight, the pawn steps one cell toward the rook - into a
+    # cell the rook's own path already covers. Nothing but the arbiter's
+    # own event loop tracks this: the pawn's short motion resolves (lands
+    # on the Board) well before the rook's clock reaches that cell.
+    board = Board([
+        ["wR", "."],
+        [".", "."],
+        [".", "."],
+        [".", "."],
+        ["bP", "."],
+    ])
+    arbiter = RealTimeArbiter(board)
+    rook = board.piece_at(Position(0, 0))
+    pawn = board.piece_at(Position(4, 0))
+
+    arbiter.start_motion(rook, Position(0, 0), Position(4, 0), duration_ms=400)  # 100ms/cell
+    arbiter.advance_time(50)
+    arbiter.start_motion(pawn, Position(4, 0), Position(3, 0), duration_ms=50)
+    arbiter.advance_time(50)  # pawn lands on (3, 0) at t=100, into the rook's path
+
+    events = arbiter.advance_time(300)  # the rook's clock reaches (3, 0) at t=300
+
+    assert events == [
+        ArrivalEvent(
+            piece_id=rook.id, source=Position(0, 0), destination=Position(3, 0),
+            captured_piece_id=pawn.id, king_captured=False,
+        ),
+        ArrivalEvent(
+            piece_id=rook.id, source=Position(0, 0), destination=Position(4, 0),
+            captured_piece_id=None, king_captured=False,
+        ),
+    ]
+    assert board.piece_at(Position(3, 0)) is None  # the pawn was captured in passing
+    assert board.piece_at(Position(4, 0)).id == rook.id  # the rook reached its own destination
+
+
+def test_motion_stops_short_of_a_friendly_piece_that_landed_on_an_intermediate_cell():
+    board = Board([
+        ["wR", "."],
+        [".", "."],
+        [".", "."],
+        [".", "."],
+        ["wN", "."],
+    ])
+    arbiter = RealTimeArbiter(board)
+    rook = board.piece_at(Position(0, 0))
+    knight = board.piece_at(Position(4, 0))
+
+    arbiter.start_motion(rook, Position(0, 0), Position(4, 0), duration_ms=400)
+    arbiter.advance_time(50)
+    arbiter.start_motion(knight, Position(4, 0), Position(3, 0), duration_ms=50)
+    arbiter.advance_time(50)  # knight lands on (3, 0) at t=100, into the rook's path
+
+    events = arbiter.advance_time(300)
+
+    # Truncated one cell short of (3, 0) - i.e. redirected to (2, 0) - and
+    # that shortened motion is now itself due, so it lands normally there.
+    assert events == [ArrivalEvent(
+        piece_id=rook.id, source=Position(0, 0), destination=Position(2, 0),
+        captured_piece_id=None, king_captured=False,
+    )]
+    assert board.piece_at(Position(2, 0)).id == rook.id
+    assert board.piece_at(Position(3, 0)).id == knight.id
+    assert board.piece_at(Position(4, 0)) is None
+
+
+def test_motion_captures_a_king_on_an_intermediate_cell_and_reports_it():
+    board = Board([
+        ["wR", "."],
+        [".", "."],
+        [".", "."],
+        [".", "."],
+        ["bK", "."],
+    ])
+    arbiter = RealTimeArbiter(board)
+    rook = board.piece_at(Position(0, 0))
+    king = board.piece_at(Position(4, 0))
+
+    arbiter.start_motion(rook, Position(0, 0), Position(4, 0), duration_ms=400)
+    arbiter.advance_time(50)
+    arbiter.start_motion(king, Position(4, 0), Position(3, 0), duration_ms=50)
+    arbiter.advance_time(50)
+
+    events = arbiter.advance_time(300)
+
+    assert events[0] == ArrivalEvent(
+        piece_id=rook.id, source=Position(0, 0), destination=Position(3, 0),
+        captured_piece_id=king.id, king_captured=True,
+    )
+
+
+def test_knight_ignores_a_piece_that_landed_along_its_geometric_path():
+    # A knight's path_cells() is only ever its destination - it has no
+    # in-transit cells at all, so nothing can be encountered mid-flight.
+    board = Board([
+        ["wN", ".", "."],
+        [".", ".", "."],
+        [".", ".", "."],
+    ])
+    arbiter = RealTimeArbiter(board)
+    knight = board.piece_at(Position(0, 0))
+
+    arbiter.start_motion(knight, Position(0, 0), Position(2, 1), duration_ms=200)
+    events = arbiter.advance_time(200)
+
+    assert events == [ArrivalEvent(
+        piece_id=knight.id, source=Position(0, 0), destination=Position(2, 1),
+        captured_piece_id=None, king_captured=False,
+    )]
 
 
 # -- jump ending ---------------------------------------------------------

@@ -758,6 +758,43 @@ def test_cooldown_only_starts_once_a_piece_truly_lands_not_at_a_mid_flight_captu
     assert not engine.arbiter.is_resting(black_id)
 
 
+def test_king_captured_on_an_intermediate_cell_ends_the_game_and_skips_later_same_batch_events():
+    # A rook flies the length of a column toward the enemy king's cell;
+    # the king steps one cell out of the way, into a cell the rook's path
+    # already covers, so the rook captures it in passing rather than at
+    # its own final destination - proving GameEngine reacts to a capture
+    # reported mid-flight (see RealTimeArbiter._resolve_encounter), not
+    # only to a capture at a motion's own destination.
+    rows = [
+        ["wR", "wN", "."],
+        [".", ".", "."],
+        [".", ".", "."],
+        [".", ".", "."],
+        ["bK", ".", "."],
+    ]
+    engine, controller, board = make_engine(rows, move_duration=100, long_rest_duration=1000)
+    knight_id = board.piece_at(Position(0, 1)).id
+    rook_id = board.piece_at(Position(0, 0)).id
+
+    engine.request_move(Position(0, 0), Position(4, 0))  # rook: reaches (3,0) at t=300
+    engine.request_move(Position(4, 0), Position(3, 0))  # king sidesteps into the rook's path, lands t=100
+
+    engine.wait(150)
+    # Queued later so its own landing (t=150+200=350) falls chronologically
+    # *after* the king capture (t=300), in the very same wait() call below.
+    engine.request_move(Position(0, 1), Position(2, 2))
+
+    engine.wait(400)  # covers t=300 (king captured) and t=350 (knight lands)
+
+    assert engine.game_over is True
+    # The arbiter mechanically finished resolving everything up to the new
+    # clock regardless of game-over - the knight really did land - but
+    # GameEngine must never have reached that event to act on it.
+    assert get(board, 2, 2) == "wN"
+    assert not engine.arbiter.is_resting(knight_id)
+    assert not engine.arbiter.is_resting(rook_id)
+
+
 def test_snapshot_reports_rest_fraction_remaining_for_a_resting_piece():
     rows = [["wR", ".", "."], [".", ".", "."], [".", ".", "."]]
     engine, controller, board = make_engine(rows, long_rest_duration=1000)
