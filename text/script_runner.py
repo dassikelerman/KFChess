@@ -1,4 +1,4 @@
-from texttests.script_parser import ClickCommand, JumpCommand, PrintBoardCommand, WaitCommand
+from text.script_parser import ClickCommand, JumpCommand, PrintBoardCommand, WaitCommand
 
 
 class ScriptRunner:

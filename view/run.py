@@ -8,8 +8,8 @@ import time
 
 import cv2
 
-import app
 import constants
+from app.game_builder import build_game
 from assets.piece_animations import AnimationLibrary
 from input.controller import Controller
 from view.click_router import ClickRouter
@@ -32,20 +32,18 @@ FRAME_POLL_MS = 16
 
 
 def run(board_text=None):
-    app_components = app.build_app(STANDARD_START_BOARD if board_text is None else board_text)
-    engine = app_components.engine
+    game = build_game(STANDARD_START_BOARD if board_text is None else board_text)
+    engine = game.engine
 
-    controller_white = Controller(engine, app_components.board_mapper)
-    controller_black = Controller(engine, app_components.board_mapper)
-    router = ClickRouter(
-        engine, app_components.board_mapper, controller_white, controller_black
-    )
+    controller_white = Controller(engine, game.board_mapper)
+    controller_black = Controller(engine, game.board_mapper)
+    router = ClickRouter(engine, game.board_mapper, controller_white, controller_black)
 
     view = GameView(
         constants.BOARD_IMAGE_PATH,
         constants.CELL_SIZE,
-        app_components.board.width,
-        app_components.board.height,
+        game.board.width,
+        game.board.height,
         AnimationLibrary(constants.PIECES_DIR),
     )
 

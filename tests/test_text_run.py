@@ -1,5 +1,5 @@
-import app as main_module
-from texttests.script_parser import parse as parse_script
+import text.run as main_module
+from text.script_parser import parse as parse_script
 
 
 def test_run_prints_board_on_print_command(capsys):
