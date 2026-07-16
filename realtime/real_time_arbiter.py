@@ -29,6 +29,7 @@ class RealTimeArbiter:
             return None
         start_time, end_time = entry
         if self._clock >= end_time:
+            del self._cooldowns[piece_id]
             return None
         total = end_time - start_time
         if total <= 0:
@@ -38,14 +39,8 @@ class RealTimeArbiter:
     def is_jumping_on(self, cell):
         return any(jump.cell == cell for jump in self._active_jumps)
 
-    def active_motion_for(self, piece_id):
-        return next((m for m in self._active_motions if m.piece_id == piece_id), None)
-
     def active_motions(self):
         return list(self._active_motions)
-
-    def active_jump_for(self, cell):
-        return next((j for j in self._active_jumps if j.cell == cell), None)
 
     def start_motion(self, piece, source, destination, duration_ms):
         start_time = self._clock
@@ -207,11 +202,10 @@ class RealTimeArbiter:
     def _is_intercepted(self, motion, piece):
         # An empty guarded cell must not intercept indiscriminately -
         # only a jump still actually defended by some piece counts.
-        return any(
-            jump.cell == motion.destination and self._piece_color(jump.cell) not in (None, piece.color)
-            for jump in self._active_jumps
-        )
-
-    def _piece_color(self, cell):
-        piece = self._board.piece_at(cell)
-        return piece.color if piece is not None else None
+        for jump in self._active_jumps:
+            if jump.cell != motion.destination:
+                continue
+            defender = self._board.piece_at(jump.cell)
+            if defender is not None and defender.color != piece.color:
+                return True
+        return False

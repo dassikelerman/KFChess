@@ -68,10 +68,6 @@ class GameEngine:
     def arbiter(self):
         return self._arbiter
 
-    @property
-    def jump_duration(self):
-        return self._jump_duration
-
     def request_move(self, source, destination):
         if self._game_over:
             return MoveResult(False, "game_over")
@@ -137,7 +133,7 @@ class GameEngine:
             render_row=float(piece.cell.row),
             render_col=float(piece.cell.col),
             is_moving=False,
-            is_jumping=self._arbiter.active_jump_for(piece.cell) is not None,
+            is_jumping=self._arbiter.is_jumping_on(piece.cell),
             rest_fraction_remaining=self._arbiter.rest_remaining_fraction(piece.id),
         )
 

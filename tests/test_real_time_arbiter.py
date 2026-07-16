@@ -29,7 +29,7 @@ def test_motion_not_yet_due_stays_active():
     events = arbiter.advance_time(999)
 
     assert events == []
-    assert arbiter.active_motion_for(rook.id) is not None
+    assert any(m.piece_id == rook.id for m in arbiter.active_motions())
     assert board.piece_at(Position(0, 0)) is None
     assert board.piece_at(Position(0, 1)) is None
 
@@ -94,7 +94,7 @@ def test_enemy_moving_into_a_vacated_source_does_not_affect_the_departed_motion(
     assert board.piece_at(Position(0, 0)).id == rook.id
 
 
-def test_active_motion_for_returns_the_motion_for_that_piece():
+def test_active_motions_reports_the_motion_for_that_piece_with_its_source_and_destination():
     board = Board([["wR", "wN"], [".", "."]])
     arbiter = RealTimeArbiter(board)
     rook = board.piece_at(Position(0, 0))
@@ -102,16 +102,15 @@ def test_active_motion_for_returns_the_motion_for_that_piece():
 
     arbiter.start_motion(rook, Position(0, 0), Position(1, 0), duration_ms=1000)
 
-    motion = arbiter.active_motion_for(rook.id)
-    assert motion is not None
-    assert motion.piece_id == rook.id
-    assert motion.source == Position(0, 0)
-    assert motion.destination == Position(1, 0)
+    motions = {m.piece_id: m for m in arbiter.active_motions()}
+    assert rook.id in motions
+    assert motions[rook.id].source == Position(0, 0)
+    assert motions[rook.id].destination == Position(1, 0)
 
-    assert arbiter.active_motion_for(knight.id) is None
+    assert knight.id not in motions  # knight never moved
 
 
-def test_active_motion_for_returns_none_after_the_motion_resolves():
+def test_active_motions_no_longer_reports_a_motion_once_it_resolves():
     board = Board([["wR", "."]])
     arbiter = RealTimeArbiter(board)
     rook = board.piece_at(Position(0, 0))
@@ -119,29 +118,25 @@ def test_active_motion_for_returns_none_after_the_motion_resolves():
     arbiter.start_motion(rook, Position(0, 0), Position(0, 1), duration_ms=500)
     arbiter.advance_time(500)
 
-    assert arbiter.active_motion_for(rook.id) is None
+    assert not any(m.piece_id == rook.id for m in arbiter.active_motions())
 
 
-def test_active_jump_for_returns_the_jump_guarding_that_cell():
+def test_is_jumping_on_reflects_which_cell_a_jump_guards():
     arbiter = RealTimeArbiter(Board([["bP", "."]]))
 
     arbiter.start_jump(Position(0, 0), end_time=1000)
 
-    jump = arbiter.active_jump_for(Position(0, 0))
-    assert jump is not None
-    assert jump.cell == Position(0, 0)
-    assert jump.end_time == 1000
-
-    assert arbiter.active_jump_for(Position(0, 1)) is None
+    assert arbiter.is_jumping_on(Position(0, 0))
+    assert not arbiter.is_jumping_on(Position(0, 1))
 
 
-def test_active_jump_for_returns_none_once_the_jump_expires():
+def test_is_jumping_on_becomes_false_once_the_jump_expires():
     arbiter = RealTimeArbiter(Board([["bP", "."]]))
 
     arbiter.start_jump(Position(0, 0), end_time=500)
     arbiter.advance_time(500)
 
-    assert arbiter.active_jump_for(Position(0, 0)) is None
+    assert not arbiter.is_jumping_on(Position(0, 0))
 
 
 # -- in-transit collisions ---------------------------------------------------
@@ -273,7 +268,7 @@ def test_advance_time_reports_a_jump_ended_event_when_its_window_elapses():
     events = arbiter.advance_time(500)
 
     assert events == [JumpEndedEvent(piece_id=pawn.id, cell=Position(0, 0))]
-    assert arbiter.active_jump_for(Position(0, 0)) is None
+    assert not arbiter.is_jumping_on(Position(0, 0))
 
 
 def test_advance_time_does_not_report_a_jump_not_yet_due():
@@ -284,7 +279,7 @@ def test_advance_time_does_not_report_a_jump_not_yet_due():
     events = arbiter.advance_time(499)
 
     assert events == []
-    assert arbiter.active_jump_for(Position(0, 0)) is not None
+    assert arbiter.is_jumping_on(Position(0, 0))
 
 
 def test_advance_time_reports_no_jump_ended_event_for_an_empty_guarded_cell():
@@ -295,7 +290,7 @@ def test_advance_time_reports_no_jump_ended_event_for_an_empty_guarded_cell():
     events = arbiter.advance_time(500)
 
     assert events == []
-    assert arbiter.active_jump_for(Position(0, 0)) is None
+    assert not arbiter.is_jumping_on(Position(0, 0))
 
 
 # -- cooldown -----------------------------------------------------------
