@@ -8,8 +8,8 @@ class ClickRouter:
     click in that gesture until its Controller's own selection clears
     (see docs for the full protocol)."""
 
-    def __init__(self, board, board_mapper, controller_white, controller_black):
-        self._board = board
+    def __init__(self, game_engine, board_mapper, controller_white, controller_black):
+        self._game_engine = game_engine
         self._board_mapper = board_mapper
         self._controllers = {
             PieceColor.WHITE: controller_white,
@@ -38,7 +38,7 @@ class ClickRouter:
         pos = self._board_mapper.pixel_to_cell(x, y)
         if pos is None:
             return None
-        piece = self._board.piece_at(pos)
+        piece = self._game_engine.piece_at(pos)
         if piece is None:
             return None
         return self._controllers[piece.color]

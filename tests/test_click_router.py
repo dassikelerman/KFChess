@@ -41,7 +41,7 @@ def make_router(rows):
     board_mapper = BoardMapper(CELL_SIZE, board.width, board.height)
     controller_white = Controller(engine, board_mapper)
     controller_black = Controller(engine, board_mapper)
-    router = ClickRouter(board, board_mapper, controller_white, controller_black)
+    router = ClickRouter(engine, board_mapper, controller_white, controller_black)
     return engine, board, controller_white, controller_black, router
 
 

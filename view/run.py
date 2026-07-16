@@ -38,7 +38,7 @@ def run(board_text=None):
     controller_white = Controller(engine, app_components.board_mapper)
     controller_black = Controller(engine, app_components.board_mapper)
     router = ClickRouter(
-        app_components.board, app_components.board_mapper, controller_white, controller_black
+        engine, app_components.board_mapper, controller_white, controller_black
     )
 
     view = GameView(
