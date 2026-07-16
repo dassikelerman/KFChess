@@ -54,7 +54,7 @@ def run(board_text=None):
         last_tick = now
         engine.wait(dt_ms)
 
-        frame = view.render(engine.snapshot(), engine.clock)
+        frame = view.render(engine.snapshot(), engine.clock, controller.selected)
         cv2.imshow(WINDOW_NAME, frame.img)
 
         key = cv2.waitKey(FRAME_POLL_MS) & 0xFF

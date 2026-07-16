@@ -5,13 +5,16 @@ from view.img import Img
 from view.piece_animator import PieceAnimator
 from view.piece_state_machine import PieceStateMachine
 
-# Fraction is normalized against each rest's own duration (see
-# RealTimeArbiter.rest_remaining_fraction), so a short rest fades out
-# quickly and a long rest slowly with no separate speed setting needed.
+# Height is normalized against each rest's own duration (see
+# RealTimeArbiter.rest_remaining_fraction), so the curtain covering the
+# piece shrinks from the top down at a pace matching that rest's own
+# length, with no separate speed setting needed.
 REST_OVERLAY_COLOR_BGR = (230, 160, 90)
-REST_OVERLAY_FILL_MAX_ALPHA = 0.55
-REST_OVERLAY_BORDER_MAX_ALPHA = 0.9
-REST_OVERLAY_BORDER_THICKNESS = 6
+REST_OVERLAY_ALPHA = 0.55
+
+SELECTION_FRAME_COLOR_BGR = (60, 220, 255)
+SELECTION_FRAME_THICKNESS = 4
+SELECTION_FRAME_ALPHA = 0.85
 
 
 class GameView:
@@ -26,7 +29,7 @@ class GameView:
         self._state_machine = PieceStateMachine(animation_library)
         self._known_piece_ids = set()
 
-    def render(self, snapshot, clock_ms):
+    def render(self, snapshot, clock_ms, selected=None):
         canvas = Img()
         canvas.img = self._board_image.img.copy()
         for piece in snapshot.pieces:
@@ -35,6 +38,11 @@ class GameView:
         # sprite instead of being hidden underneath it.
         for piece in snapshot.pieces:
             self._draw_rest_overlay(canvas, piece)
+        # Drawn last so the selection frame is never hidden under a
+        # piece or its rest overlay. `selected` is owned by Controller
+        # and handed to GameView purely for drawing - it is not part of
+        # GameSnapshot or GameEngine state.
+        self._draw_selection_frame(canvas, selected)
         self._forget_vanished_pieces(snapshot)
         return canvas
 
@@ -55,15 +63,26 @@ class GameView:
         y = int(piece.row * self._cell_size)
         size = self._cell_size
 
-        fill_alpha = REST_OVERLAY_FILL_MAX_ALPHA * fraction
-        self._blend(canvas.img[y:y + size, x:x + size, :3], color, fill_alpha)
+        height = int(size * fraction)
+        if height <= 0:
+            return
+        self._blend(canvas.img[y:y + height, x:x + size, :3], color, REST_OVERLAY_ALPHA)
 
-        border_alpha = REST_OVERLAY_BORDER_MAX_ALPHA * fraction
-        t = REST_OVERLAY_BORDER_THICKNESS
-        self._blend(canvas.img[y:y + t, x:x + size, :3], color, border_alpha)  # top
-        self._blend(canvas.img[y + size - t:y + size, x:x + size, :3], color, border_alpha)  # bottom
-        self._blend(canvas.img[y:y + size, x:x + t, :3], color, border_alpha)  # left
-        self._blend(canvas.img[y:y + size, x + size - t:x + size, :3], color, border_alpha)  # right
+    def _draw_selection_frame(self, canvas, selected):
+        if selected is None:
+            return
+
+        row, col = selected
+        color = np.array(SELECTION_FRAME_COLOR_BGR)
+        x = int(col * self._cell_size)
+        y = int(row * self._cell_size)
+        size = self._cell_size
+        t = SELECTION_FRAME_THICKNESS
+
+        self._blend(canvas.img[y:y + t, x:x + size, :3], color, SELECTION_FRAME_ALPHA)  # top
+        self._blend(canvas.img[y + size - t:y + size, x:x + size, :3], color, SELECTION_FRAME_ALPHA)  # bottom
+        self._blend(canvas.img[y:y + size, x:x + t, :3], color, SELECTION_FRAME_ALPHA)  # left
+        self._blend(canvas.img[y:y + size, x + size - t:x + size, :3], color, SELECTION_FRAME_ALPHA)  # right
 
     def _blend(self, roi, color, alpha):
         roi[:] = (roi * (1 - alpha) + color * alpha).astype(roi.dtype)
