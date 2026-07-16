@@ -1,9 +1,9 @@
 import numpy as np
 
 from assets.piece_animations import frame_index_for
-from view.animation_state import derive_animation_state
 from view.img import Img
 from view.piece_animator import PieceAnimator
+from view.piece_state_machine import PieceStateMachine
 
 # Fraction is normalized against each rest's own duration (see
 # RealTimeArbiter.rest_remaining_fraction), so a short rest fades out
@@ -23,6 +23,8 @@ class GameView:
         )
         self._sprite_cache = {}
         self._animator = PieceAnimator()
+        self._state_machine = PieceStateMachine(animation_library)
+        self._known_piece_ids = set()
 
     def render(self, snapshot, clock_ms):
         canvas = Img()
@@ -33,7 +35,15 @@ class GameView:
         # sprite instead of being hidden underneath it.
         for piece in snapshot.pieces:
             self._draw_rest_overlay(canvas, piece)
+        self._forget_vanished_pieces(snapshot)
         return canvas
+
+    def _forget_vanished_pieces(self, snapshot):
+        current_ids = {piece.id for piece in snapshot.pieces}
+        for piece_id in self._known_piece_ids - current_ids:
+            self._animator.forget(piece_id)
+            self._state_machine.forget(piece_id)
+        self._known_piece_ids = current_ids
 
     def _draw_rest_overlay(self, canvas, piece):
         if piece.rest_fraction_remaining is None:
@@ -59,8 +69,9 @@ class GameView:
         roi[:] = (roi * (1 - alpha) + color * alpha).astype(roi.dtype)
 
     def _draw_piece(self, canvas, piece, clock_ms):
-        clip = self._library.get(piece.color, piece.kind, derive_animation_state(piece))
-        elapsed_ms = self._animator.elapsed_ms_for(piece, clock_ms)
+        state = self._state_machine.state_for(piece, clock_ms)
+        clip = self._library.get(piece.color, piece.kind, state)
+        elapsed_ms = self._animator.elapsed_ms_for(piece.id, state, clock_ms)
         sprite_path = clip.sprite_paths[frame_index_for(clip, elapsed_ms)]
         sprite = self._sprite(sprite_path)
 
