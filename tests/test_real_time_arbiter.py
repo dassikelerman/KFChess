@@ -1,6 +1,7 @@
 import pytest
 
 from model.board import Board
+from model.game_state import JumpEndedEvent
 from model.position import Position
 from realtime.real_time_arbiter import RealTimeArbiter
 
@@ -258,6 +259,43 @@ def test_same_result_for_one_big_wait_as_for_several_small_waits():
         arbiter_b.advance_time(100)
 
     assert board_a.snapshot() == board_b.snapshot()
+
+
+# -- jump ending ---------------------------------------------------------
+
+
+def test_advance_time_reports_a_jump_ended_event_when_its_window_elapses():
+    board = Board([["bP", "."]])
+    arbiter = RealTimeArbiter(board)
+    pawn = board.piece_at(Position(0, 0))
+
+    arbiter.start_jump(Position(0, 0), end_time=500)
+    events = arbiter.advance_time(500)
+
+    assert events == [JumpEndedEvent(piece_id=pawn.id, cell=Position(0, 0))]
+    assert arbiter.active_jump_for(Position(0, 0)) is None
+
+
+def test_advance_time_does_not_report_a_jump_not_yet_due():
+    board = Board([["bP", "."]])
+    arbiter = RealTimeArbiter(board)
+
+    arbiter.start_jump(Position(0, 0), end_time=500)
+    events = arbiter.advance_time(499)
+
+    assert events == []
+    assert arbiter.active_jump_for(Position(0, 0)) is not None
+
+
+def test_advance_time_reports_no_jump_ended_event_for_an_empty_guarded_cell():
+    board = Board([[".", "."]])
+    arbiter = RealTimeArbiter(board)
+
+    arbiter.start_jump(Position(0, 0), end_time=500)
+    events = arbiter.advance_time(500)
+
+    assert events == []
+    assert arbiter.active_jump_for(Position(0, 0)) is None
 
 
 # -- cooldown -----------------------------------------------------------

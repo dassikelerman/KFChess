@@ -18,6 +18,12 @@ ArrivalEvents = List[ArrivalEvent]
 
 
 @dataclass(frozen=True)
+class JumpEndedEvent:
+    piece_id: str
+    cell: Position
+
+
+@dataclass(frozen=True)
 class MoveResult:
     is_accepted: bool
     reason: str

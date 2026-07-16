@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from model.game_state import GameSnapshot, MoveResult, PieceSnapshot
+from model.game_state import GameSnapshot, JumpEndedEvent, MoveResult, PieceSnapshot
 from model.piece import PieceColor, kind_letter, parse_kind
 
 
@@ -164,23 +164,16 @@ class GameEngine:
         return row, col
 
     def _advance(self, ms):
-        # A jump's guard window ending isn't reported by advance_time()
-        # itself, so pieces about to come off a jump-triggered cooldown
-        # are captured here before that happens.
-        new_clock = self._arbiter.clock + ms
-        expiring_jump_pieces = [
-            self._board.piece_at(jump.cell)
-            for jump in self._arbiter.active_jumps()
-            if jump.end_time <= new_clock
-        ]
-
         events = self._arbiter.advance_time(ms)
 
-        for piece in expiring_jump_pieces:
-            if piece is not None:
-                self._arbiter.set_cooldown(piece.id, self._short_rest_duration)
+        arrival_events = []
+        for event in events:
+            if isinstance(event, JumpEndedEvent):
+                self._arbiter.set_cooldown(event.piece_id, self._short_rest_duration)
+            else:
+                arrival_events.append(event)
 
-        self._apply_events(events)
+        self._apply_events(arrival_events)
 
     def _apply_events(self, events):
         for event in events:

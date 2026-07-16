@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from model.game_state import ArrivalEvent
+from model.game_state import ArrivalEvent, JumpEndedEvent
 from model.piece import PieceKind
 from realtime.motion import Jump, Motion
 
@@ -35,9 +35,6 @@ class RealTimeArbiter:
             return 0.0
         return (end_time - self._clock) / total
 
-    def active_jumps(self):
-        return list(self._active_jumps)
-
     def is_jumping_on(self, cell):
         return any(jump.cell == cell for jump in self._active_jumps)
 
@@ -65,6 +62,12 @@ class RealTimeArbiter:
 
         new_clock = self._clock + ms
         events = []
+
+        for jump in self._active_jumps:
+            if jump.end_time <= new_clock:
+                piece = self._board.piece_at(jump.cell)
+                if piece is not None:
+                    events.append(JumpEndedEvent(piece_id=piece.id, cell=jump.cell))
 
         # Every arrival/collision due by new_clock is resolved in strict
         # chronological order (never insertion order), recomputed fresh
