@@ -42,7 +42,7 @@ class Controller:
     def _select(self, pos):
         if self._is_busy(pos):
             return None
-        piece = self._game_engine.board.piece_at(pos)
+        piece = self._game_engine.piece_at(pos)
         if piece is None:
             return None
         self._selected_piece_id = piece.id
@@ -50,8 +50,7 @@ class Controller:
 
     def _act_on_selection(self, pos):
         start = self._selected
-        board = self._game_engine.board
-        piece = board.piece_at(start)
+        piece = self._game_engine.piece_at(start)
 
         # The originally selected piece may have been captured (and its
         # cell taken by a different piece) while waiting for the second
@@ -62,7 +61,7 @@ class Controller:
             self._selected_piece_id = None
             return
 
-        target = board.piece_at(pos)
+        target = self._game_engine.piece_at(pos)
         if target is not None and target.color == piece.color:
             if not self._is_busy(pos):
                 self._selected = pos

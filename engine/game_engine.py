@@ -61,12 +61,11 @@ class GameEngine:
         return self._arbiter.clock
 
     @property
-    def board(self):
-        return self._board
-
-    @property
     def arbiter(self):
         return self._arbiter
+
+    def piece_at(self, position):
+        return self._board.piece_at(position)
 
     # -- Moves ----------------------------------------------------------------
 
