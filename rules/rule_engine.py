@@ -1,12 +1,15 @@
 from dataclasses import dataclass
 
+from model.game_state import ActionResultReason
 from rules.piece_rules import MoveContext
 
 
 @dataclass(frozen=True)
 class MoveValidation:
+    # Internal legality-check result - kept separate from ActionResult,
+    # the external result of a whole request_move()/request_jump() call.
     is_valid: bool
-    reason: str
+    reason: ActionResultReason
 
 
 class RuleEngine:
@@ -16,11 +19,11 @@ class RuleEngine:
     def validate_move(self, board, source, destination):
         piece = board.piece_at(source)
         if piece is None:
-            return MoveValidation(False, "empty_source")
+            return MoveValidation(False, ActionResultReason.EMPTY_SOURCE)
 
         target = board.piece_at(destination)
         if target is not None and target.color == piece.color:
-            return MoveValidation(False, "friendly_destination")
+            return MoveValidation(False, ActionResultReason.FRIENDLY_DESTINATION)
 
         strategy = self._registry.get(piece.kind)
         dr = destination.row - source.row
@@ -33,9 +36,9 @@ class RuleEngine:
             target_occupied=target is not None,
         )
         if not strategy.is_legal(dr, dc, context):
-            return MoveValidation(False, "illegal_piece_move")
+            return MoveValidation(False, ActionResultReason.ILLEGAL_PIECE_MOVE)
 
-        return MoveValidation(True, "ok")
+        return MoveValidation(True, ActionResultReason.OK)
 
 
 class UnknownPieceKindError(Exception):

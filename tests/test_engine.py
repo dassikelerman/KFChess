@@ -1,7 +1,7 @@
 import pytest
 
 from model.board import Board
-from model.game_state import MoveResult
+from model.game_state import ActionResult, ActionResultReason
 from model.position import Position
 from rules.rule_engine import RuleEngine, build_default_registry
 from engine.game_conditions import KingCaptureWinCondition, LastRankPromotion, WinCondition, PromotionRule
@@ -462,7 +462,7 @@ def test_request_move_rejects_a_source_under_an_active_jump():
 
     result = engine.request_move(Position(0, 0), Position(0, 1))
 
-    assert result == MoveResult(False, "jump_in_progress")
+    assert result == ActionResult(False, ActionResultReason.JUMP_IN_PROGRESS)
     assert get(board, 0, 0) == "bR"
     assert engine.arbiter.is_jumping_on(Position(0, 0))
 
@@ -600,6 +600,62 @@ def test_is_busy_reflects_active_jump():
     assert engine.is_busy(Position(0, 0)) is True
 
 
+# -- request_move/request_jump always return an ActionResult -----------------
+
+
+def test_request_jump_on_a_piece_returns_an_accepted_action_result():
+    engine, controller, board = make_engine([["wR", "."]])
+    result = engine.request_jump(Position(0, 0))
+    assert result == ActionResult(True, ActionResultReason.OK)
+
+
+def test_request_jump_on_an_empty_cell_returns_empty_source():
+    engine, controller, board = make_engine([["wR", "."]])
+    result = engine.request_jump(Position(0, 1))
+    assert result == ActionResult(False, ActionResultReason.EMPTY_SOURCE)
+
+
+def test_request_jump_on_a_cell_already_jump_guarded_returns_jump_in_progress():
+    engine, controller, board = make_engine([["wR", "."]])
+    engine.request_jump(Position(0, 0))
+    result = engine.request_jump(Position(0, 0))
+    assert result == ActionResult(False, ActionResultReason.JUMP_IN_PROGRESS)
+
+
+def test_request_jump_while_resting_returns_resting():
+    engine, controller, board = make_engine([["wR", "."]], short_rest_duration=300)
+    engine.request_jump(Position(0, 0))
+    engine.wait(JUMP_DURATION)
+
+    result = engine.request_jump(Position(0, 0))
+
+    assert result == ActionResult(False, ActionResultReason.RESTING)
+
+
+def test_request_jump_after_game_over_returns_game_over():
+    rows = [["wR", ".", "bK"], [".", ".", "."], ["wN", ".", "."]]
+    engine, controller, board = make_engine(rows)
+    engine.request_move(Position(0, 0), Position(0, 2))
+    engine.wait(MOVE_DURATION * 2)
+    assert engine.game_over is True
+
+    result = engine.request_jump(Position(2, 0))
+
+    assert result == ActionResult(False, ActionResultReason.GAME_OVER)
+
+
+def test_request_move_after_game_over_returns_game_over():
+    rows = [["wR", ".", "bK"], [".", ".", "."], ["wN", ".", "."]]
+    engine, controller, board = make_engine(rows)
+    engine.request_move(Position(0, 0), Position(0, 2))
+    engine.wait(MOVE_DURATION * 2)
+    assert engine.game_over is True
+
+    result = engine.request_move(Position(2, 0), Position(2, 1))
+
+    assert result == ActionResult(False, ActionResultReason.GAME_OVER)
+
+
 def test_pawn_promotion_on_arrival():
     rows = [[".", ".", "."], ["wP", ".", "."], [".", ".", "."]]
     engine, controller, board = make_engine(rows)
@@ -716,7 +772,7 @@ def test_piece_cannot_move_again_while_resting_after_a_move():
     assert get(board, 0, 2) == "wR"
 
     result = engine.request_move(Position(0, 2), Position(2, 2))
-    assert result == MoveResult(False, "resting")
+    assert result == ActionResult(False, ActionResultReason.RESTING)
     assert get(board, 0, 2) == "wR"
 
     engine.wait(500)
@@ -748,7 +804,7 @@ def test_piece_rests_after_a_jump_ends_and_can_act_again_once_it_elapses():
     engine.wait(JUMP_DURATION)
 
     result = engine.request_move(Position(0, 0), Position(0, 1))
-    assert result == MoveResult(False, "resting")
+    assert result == ActionResult(False, ActionResultReason.RESTING)
 
     engine.wait(300)
     result = engine.request_move(Position(0, 0), Position(0, 1))

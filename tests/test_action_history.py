@@ -97,7 +97,7 @@ def test_game_over_is_recorded_with_no_single_color_so_it_shows_on_both_panels()
 
 def test_illegal_or_rejected_actions_are_never_recorded():
     # ActionHistory only ever subscribes to already-verified game events -
-    # a rejected MoveResult never reaches it because GameEngine never
+    # a rejected ActionResult never reaches it because GameEngine never
     # publishes anything for a request it refused.
     dispatcher, history = make()
     assert history.entries() == []

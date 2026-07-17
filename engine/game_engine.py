@@ -9,7 +9,7 @@ from events.game_events import (
     MoveCompletedEvent,
     PromotionEvent,
 )
-from model.game_state import JumpEndedEvent, MoveResult
+from model.game_state import ActionResult, ActionResultReason, JumpEndedEvent
 from model.piece import PieceColor, kind_letter, parse_kind
 
 
@@ -86,23 +86,23 @@ class GameEngine:
 
     def request_move(self, source, destination):
         if self._game_over:
-            return MoveResult(False, "game_over")
+            return ActionResult(False, ActionResultReason.GAME_OVER)
 
         if self._arbiter.is_jumping_on(source):
-            return MoveResult(False, "jump_in_progress")
+            return ActionResult(False, ActionResultReason.JUMP_IN_PROGRESS)
 
         piece = self._board.piece_at(source)
         if piece is not None and self._arbiter.is_resting(piece.id):
-            return MoveResult(False, "resting")
+            return ActionResult(False, ActionResultReason.RESTING)
 
         validation = self._rule_engine.validate_move(self._board, source, destination)
         if not validation.is_valid:
-            return MoveResult(False, validation.reason)
+            return ActionResult(False, validation.reason)
 
         distance = max(abs(destination.row - source.row), abs(destination.col - source.col))
         duration_ms = self._move_duration * distance
         self._arbiter.start_motion(piece, source, destination, duration_ms)
-        return MoveResult(True, "ok")
+        return ActionResult(True, ActionResultReason.OK)
 
     # -- Jumps ------------------------------------------------------------------
 
@@ -111,20 +111,21 @@ class GameEngine:
 
     def request_jump(self, position):
         if self._game_over:
-            return MoveResult(False, "game_over")
+            return ActionResult(False, ActionResultReason.GAME_OVER)
 
         if self.is_busy(position):
-            return
+            return ActionResult(False, ActionResultReason.JUMP_IN_PROGRESS)
 
         piece = self._board.piece_at(position)
         if piece is None:
-            return
+            return ActionResult(False, ActionResultReason.EMPTY_SOURCE)
 
         if self._arbiter.is_resting(piece.id):
-            return
+            return ActionResult(False, ActionResultReason.RESTING)
 
         end_time = self._arbiter.clock + self._jump_duration
         self._arbiter.start_jump(position, end_time)
+        return ActionResult(True, ActionResultReason.OK)
 
     # -- Event handling -----------------------------------------------------
 
