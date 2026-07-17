@@ -11,3 +11,18 @@ EMPTY_CELL = "."
 BOARD_IMAGE_PATH = "board.png"
 PIECES_DIR = "pieces2"
 PANEL_WIDTH = 220  # side panels showing each color's score and recent actions
+
+STANDARD_START_BOARD = [
+    "bR bN bB bQ bK bB bN bR",
+    "bP bP bP bP bP bP bP bP",
+    ". . . . . . . .",
+    ". . . . . . . .",
+    ". . . . . . . .",
+    ". . . . . . . .",
+    "wP wP wP wP wP wP wP wP",
+    "wR wN wB wQ wK wB wN wR",
+]
+
+WINDOW_NAME = "KungFu Chess"
+ESCAPE_KEY = 27
+FRAME_POLL_MS = 16

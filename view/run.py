@@ -16,24 +16,9 @@ from input.controller import Controller
 from view.game_ui_snapshot import build_ui_snapshot
 from view.game_view import GameView
 
-STANDARD_START_BOARD = [
-    "bR bN bB bQ bK bB bN bR",
-    "bP bP bP bP bP bP bP bP",
-    ". . . . . . . .",
-    ". . . . . . . .",
-    ". . . . . . . .",
-    ". . . . . . . .",
-    "wP wP wP wP wP wP wP wP",
-    "wR wN wB wQ wK wB wN wR",
-]
-
-WINDOW_NAME = "KungFu Chess"
-ESCAPE_KEY = 27
-FRAME_POLL_MS = 16
-
 
 def run(board_text=None):
-    game = build_game(STANDARD_START_BOARD if board_text is None else board_text)
+    game = build_game(constants.STANDARD_START_BOARD if board_text is None else board_text)
     engine = game.engine
 
     # The GUI's own click-to-cell mapping needs to know about the side
@@ -55,8 +40,10 @@ def run(board_text=None):
         panel_width=constants.PANEL_WIDTH,
     )
 
-    cv2.namedWindow(WINDOW_NAME)
-    cv2.setMouseCallback(WINDOW_NAME, lambda event, x, y, flags, userdata: _on_mouse(controller, event, x, y))
+    cv2.namedWindow(constants.WINDOW_NAME)
+    cv2.setMouseCallback(
+        constants.WINDOW_NAME, lambda event, x, y, flags, userdata: _on_mouse(controller, event, x, y)
+    )
 
     last_tick = time.perf_counter()
     while True:
@@ -67,10 +54,10 @@ def run(board_text=None):
 
         ui_snapshot = build_ui_snapshot(engine, controller, game.score_tracker, game.action_history)
         frame = view.render(ui_snapshot)
-        cv2.imshow(WINDOW_NAME, frame.img)
+        cv2.imshow(constants.WINDOW_NAME, frame.img)
 
-        key = cv2.waitKey(FRAME_POLL_MS) & 0xFF
-        if key == ESCAPE_KEY or cv2.getWindowProperty(WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
+        key = cv2.waitKey(constants.FRAME_POLL_MS) & 0xFF
+        if key == constants.ESCAPE_KEY or cv2.getWindowProperty(constants.WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
             break
         if engine.game_over:
             cv2.waitKey(0)
