@@ -3,7 +3,7 @@ import numpy as np
 from model.piece import PieceColor
 from view.piece_animations import frame_index_for
 from view.img import Img
-from view.piece_animator import PieceAnimator
+from view.piece_animation_timer import PieceAnimationTimer
 from view.piece_state_machine import PieceStateMachine
 
 # Height is normalized against each rest's own duration (see
@@ -43,7 +43,7 @@ class GameView:
         self._canvas_width = self._board_pixel_width + 2 * panel_width
         self._canvas_height = board_height * cell_size
         self._sprite_cache = {}
-        self._animator = PieceAnimator()
+        self._animator = PieceAnimationTimer()
         self._state_machine = PieceStateMachine(animation_library)
         self._known_piece_ids = set()
 
