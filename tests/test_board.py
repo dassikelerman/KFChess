@@ -57,15 +57,6 @@ def test_in_bounds():
     assert board.in_bounds(Position(0, -1)) is False
 
 
-def test_snapshot_is_a_copy():
-    board = make_board()
-    snap = board.snapshot()
-    snap[0][0] = "bQ"
-    piece = board.piece_at(Position(0, 0))
-    assert piece.color == PieceColor.WHITE
-    assert piece.kind == PieceKind.KING
-
-
 def test_empty_board_dimensions():
     board = Board([])
     assert board.width == 0

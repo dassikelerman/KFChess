@@ -254,7 +254,10 @@ def test_same_result_for_one_big_wait_as_for_several_small_waits():
     for _ in range(20):
         arbiter_b.advance_time(100)
 
-    assert board_a.snapshot() == board_b.snapshot()
+    def positions(board):
+        return {(piece.color, piece.kind, piece.cell) for piece in board.pieces()}
+
+    assert positions(board_a) == positions(board_b)
 
 
 # -- motion vs. a piece that landed mid-path ---------------------------------

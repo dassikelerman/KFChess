@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from model.piece import Piece, PieceColor, kind_letter, parse_kind
+from model.piece import Piece, PieceColor, parse_kind
 from model.position import Position
 
 
@@ -8,7 +8,6 @@ class Board:
     def __init__(self, rows=(), empty_token="."):
         self._height = len(rows)
         self._width = len(rows[0]) if rows else 0
-        self._empty_token = empty_token
         self._cells = {}
         for row_index, row in enumerate(rows):
             for col_index, token in enumerate(row):
@@ -57,9 +56,3 @@ class Board:
 
     def pieces(self):
         return list(self._cells.values())
-
-    def snapshot(self):
-        grid = [[self._empty_token] * self._width for _ in range(self._height)]
-        for pos, piece in self._cells.items():
-            grid[pos.row][pos.col] = piece.color.value + kind_letter(piece.kind)
-        return grid
