@@ -51,7 +51,7 @@ def run(board_text=None):
 
         ui_snapshot = build_ui_snapshot(engine, controller, game.score_tracker, game.action_history)
         frame = view.render(ui_snapshot)
-        cv2.imshow(constants.WINDOW_NAME, frame.img)
+        frame.show(constants.WINDOW_NAME)
 
         key = cv2.waitKey(constants.FRAME_POLL_MS) & 0xFF
         if key == constants.ESCAPE_KEY or cv2.getWindowProperty(constants.WINDOW_NAME, cv2.WND_PROP_VISIBLE) < 1:
