@@ -1043,6 +1043,53 @@ def test_stale_selection_after_capture_is_not_acted_on():
     assert controller.selected is None
 
 
+def test_refresh_selection_clears_a_selection_whose_piece_was_captured():
+    rows = [["wQ", ".", "."], [".", ".", "."], ["bR", ".", "."]]
+    engine, controller, board = make_engine(rows)
+
+    controller.click(*cell_to_pixel(0, 0))
+    assert controller.selected == (0, 0)
+
+    engine.request_move(Position(2, 0), Position(0, 0))
+    engine.wait(MOVE_DURATION * 2)
+    assert get(board, 0, 0) == "bR"
+
+    controller.refresh_selection()
+
+    assert controller.selected is None
+
+
+def test_refresh_selection_clears_a_selection_that_became_busy():
+    engine, controller, board = make_engine([["wK", "."], [".", "."]])
+
+    controller.click(*cell_to_pixel(0, 0))
+    assert controller.selected == (0, 0)
+
+    engine.request_jump(Position(0, 0))
+    controller.refresh_selection()
+
+    assert controller.selected is None
+
+
+def test_refresh_selection_leaves_a_still_valid_selection_untouched():
+    engine, controller, board = make_engine([["wK", "."], [".", "."]])
+
+    controller.click(*cell_to_pixel(0, 0))
+    assert controller.selected == (0, 0)
+
+    controller.refresh_selection()
+
+    assert controller.selected == (0, 0)
+
+
+def test_refresh_selection_is_a_noop_when_nothing_is_selected():
+    engine, controller, board = make_engine([["wK", "."], [".", "."]])
+
+    controller.refresh_selection()
+
+    assert controller.selected is None
+
+
 def test_piece_continues_to_destination_after_enemy_moves_into_vacated_source():
     rows = [[".", ".", "."], [".", "bB", "."], ["wR", ".", "."]]
     engine, controller, board = make_engine(rows)

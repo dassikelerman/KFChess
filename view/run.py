@@ -47,6 +47,7 @@ def run(board_text=None):
         dt_ms = round((now - last_tick) * 1000)
         last_tick = now
         engine.wait(dt_ms)
+        controller.refresh_selection()
 
         ui_snapshot = build_ui_snapshot(engine, controller, game.score_tracker, game.action_history)
         frame = view.render(ui_snapshot)

@@ -26,8 +26,7 @@ class Controller:
         self._act_on_selection(pos)
 
     def jump(self, x, y):
-        self._selected = None
-        self._selected_piece_id = None
+        self._clear_selection()
         if self._game_engine.game_over:
             return
 
@@ -36,6 +35,15 @@ class Controller:
             return
 
         self._game_engine.request_jump(pos)
+
+    def refresh_selection(self):
+        """Drops a selection that's gone stale (its piece was captured,
+        replaced, or is no longer selectable) without waiting for the
+        next click to notice - meant to be polled once per UI frame so
+        the selection frame never lingers on a piece that isn't there
+        anymore."""
+        if self._selected is not None and not self._selection_is_valid():
+            self._clear_selection()
 
     # -- internal helpers -------------------------------------------------
 
@@ -50,17 +58,16 @@ class Controller:
 
     def _act_on_selection(self, pos):
         start = self._selected
-        piece = self._game_engine.piece_at(start)
 
         # The originally selected piece may have been captured (and its
         # cell taken by a different piece) while waiting for the second
         # click - Position alone can't tell them apart, so identity is
         # confirmed the same way RealTimeArbiter._resolve_arrival does.
-        if piece is None or piece.id != self._selected_piece_id or self._is_busy(start):
-            self._selected = None
-            self._selected_piece_id = None
+        if not self._selection_is_valid():
+            self._clear_selection()
             return
 
+        piece = self._game_engine.piece_at(start)
         target = self._game_engine.piece_at(pos)
         if target is not None and target.color == piece.color:
             if not self._is_busy(pos):
@@ -71,6 +78,17 @@ class Controller:
         self._game_engine.request_move(start, pos)
         # An illegal target cancels the selection rather than leaving it
         # open for another attempt - the piece must be selected again.
+        self._clear_selection()
+
+    def _selection_is_valid(self):
+        piece = self._game_engine.piece_at(self._selected)
+        return (
+            piece is not None
+            and piece.id == self._selected_piece_id
+            and not self._is_busy(self._selected)
+        )
+
+    def _clear_selection(self):
         self._selected = None
         self._selected_piece_id = None
 
