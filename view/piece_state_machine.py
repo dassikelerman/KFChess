@@ -2,11 +2,25 @@
 IDLE/MOVE/JUMP derived from GameEngine's logical PieceSnapshot fields.
 Driven by AnimationLibrary's own next_state_when_finished, so the
 transition table isn't hardcoded here - see docs for the full chain.
+
+Also the single source of truth for how long a piece has been in its
+current AnimationState - a renderer needs that elapsed time to pick the
+right frame (see view.piece_animations.frame_index_for), and tracking
+it here rather than in a second, parallel timer keeps the "when did
+this piece's state last change" bookkeeping in one place.
 """
+
+from dataclasses import dataclass
 
 from view.animation_state import AnimationState, derive_animation_state
 
 _STATE_BY_VALUE = {state.value: state for state in AnimationState}
+
+
+@dataclass(frozen=True)
+class AnimationProgress:
+    state: AnimationState
+    elapsed_ms: float
 
 
 class PieceStateMachine:
@@ -18,36 +32,38 @@ class PieceStateMachine:
         engine_state = derive_animation_state(piece_snapshot)
 
         if engine_state in (AnimationState.MOVE, AnimationState.JUMP):
-            self._enter(piece_snapshot.id, engine_state, clock_ms)
-            return engine_state
+            return self._enter(piece_snapshot.id, engine_state, clock_ms)
 
         entry = self._entries.get(piece_snapshot.id)
         if entry is None:
-            self._enter(piece_snapshot.id, AnimationState.IDLE, clock_ms)
-            return AnimationState.IDLE
+            return self._enter(piece_snapshot.id, AnimationState.IDLE, clock_ms)
 
         state, entered_at = entry
         if state == AnimationState.IDLE:
-            return AnimationState.IDLE
+            return AnimationProgress(AnimationState.IDLE, clock_ms - entered_at)
 
         if state in (AnimationState.MOVE, AnimationState.JUMP):
             # Engine just reported idle right after move/jump - hand off
             # to whatever that clip's own config says comes next.
-            state = self._next_state(piece_snapshot, state)
-            self._enter(piece_snapshot.id, state, clock_ms)
-            return state
+            next_state = self._next_state(piece_snapshot, state)
+            return self._enter(piece_snapshot.id, next_state, clock_ms)
 
         if self._clip_finished(piece_snapshot, state, clock_ms - entered_at):
-            state = self._next_state(piece_snapshot, state)
-            self._enter(piece_snapshot.id, state, clock_ms)
+            next_state = self._next_state(piece_snapshot, state)
+            return self._enter(piece_snapshot.id, next_state, clock_ms)
 
-        return state
+        return AnimationProgress(state, clock_ms - entered_at)
 
     def forget(self, piece_id):
         self._entries.pop(piece_id, None)
 
     def _enter(self, piece_id, state, clock_ms):
-        self._entries[piece_id] = (state, clock_ms)
+        entry = self._entries.get(piece_id)
+        if entry is None or entry[0] != state:
+            self._entries[piece_id] = (state, clock_ms)
+            return AnimationProgress(state, 0.0)
+        _, entered_at = entry
+        return AnimationProgress(state, clock_ms - entered_at)
 
     def _next_state(self, piece_snapshot, state):
         clip = self._library.get(piece_snapshot.color, piece_snapshot.kind, state)

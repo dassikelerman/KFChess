@@ -3,7 +3,6 @@ import numpy as np
 from model.piece import PieceColor
 from view.piece_animations import frame_index_for
 from view.img import Img
-from view.piece_animation_timer import PieceAnimationTimer
 from view.piece_state_machine import PieceStateMachine
 
 # Height is normalized against each rest's own duration (see
@@ -43,7 +42,6 @@ class GameView:
         self._canvas_width = self._board_pixel_width + 2 * panel_width
         self._canvas_height = board_height * cell_size
         self._sprite_cache = {}
-        self._animator = PieceAnimationTimer()
         self._state_machine = PieceStateMachine(animation_library)
         self._known_piece_ids = set()
 
@@ -70,7 +68,6 @@ class GameView:
     def _forget_vanished_pieces(self, snapshot):
         current_ids = {piece.id for piece in snapshot.pieces}
         for piece_id in self._known_piece_ids - current_ids:
-            self._animator.forget(piece_id)
             self._state_machine.forget(piece_id)
         self._known_piece_ids = current_ids
 
@@ -156,10 +153,9 @@ class GameView:
         roi[:] = (roi * (1 - alpha) + color * alpha).astype(roi.dtype)
 
     def _draw_piece(self, canvas, piece, clock_ms):
-        state = self._state_machine.state_for(piece, clock_ms)
-        clip = self._library.get(piece.color, piece.kind, state)
-        elapsed_ms = self._animator.elapsed_ms_for(piece.id, state, clock_ms)
-        sprite_path = clip.sprite_paths[frame_index_for(clip, elapsed_ms)]
+        progress = self._state_machine.state_for(piece, clock_ms)
+        clip = self._library.get(piece.color, piece.kind, progress.state)
+        sprite_path = clip.sprite_paths[frame_index_for(clip, progress.elapsed_ms)]
         sprite = self._sprite(sprite_path)
 
         x = int(piece.render_col * self._cell_size) + self._board_x_offset

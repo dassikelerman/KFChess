@@ -54,19 +54,19 @@ def piece(id_, state, color="w", kind="Q"):
 
 def test_engine_reported_move_is_returned_as_is():
     machine = PieceStateMachine(_FakeLibrary())
-    state = machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=1000)
+    state = machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=1000).state
     assert state == AnimationState.MOVE
 
 
 def test_engine_reported_jump_is_returned_as_is():
     machine = PieceStateMachine(_FakeLibrary())
-    state = machine.state_for(piece("p1", AnimationState.JUMP), clock_ms=1000)
+    state = machine.state_for(piece("p1", AnimationState.JUMP), clock_ms=1000).state
     assert state == AnimationState.JUMP
 
 
 def test_fresh_idle_piece_is_just_idle_no_fake_rest():
     machine = PieceStateMachine(_FakeLibrary())
-    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=0)
+    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=0).state
     assert state == AnimationState.IDLE
 
 
@@ -74,7 +74,7 @@ def test_move_finishing_transitions_to_long_rest_not_idle():
     machine = PieceStateMachine(_FakeLibrary())
     machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=1000)
 
-    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=1200)
+    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=1200).state
 
     assert state == AnimationState.LONG_REST
 
@@ -83,7 +83,7 @@ def test_jump_finishing_transitions_to_short_rest_not_idle():
     machine = PieceStateMachine(_FakeLibrary())
     machine.state_for(piece("p1", AnimationState.JUMP), clock_ms=1000)
 
-    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=1200)
+    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=1200).state
 
     assert state == AnimationState.SHORT_REST
 
@@ -93,10 +93,10 @@ def test_long_rest_persists_until_its_own_cycle_finishes_then_falls_back_to_idle
     machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=0)
     machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=100)
 
-    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=400)
+    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=400).state
     assert state == AnimationState.LONG_REST
 
-    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=650)
+    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=650).state
     assert state == AnimationState.IDLE
 
 
@@ -105,10 +105,10 @@ def test_short_rest_persists_until_its_own_cycle_finishes_then_falls_back_to_idl
     machine.state_for(piece("p1", AnimationState.JUMP), clock_ms=0)
     machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=100)
 
-    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=400)
+    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=400).state
     assert state == AnimationState.SHORT_REST
 
-    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=650)
+    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=650).state
     assert state == AnimationState.IDLE
 
 
@@ -117,7 +117,7 @@ def test_moving_again_while_resting_immediately_overrides_the_rest():
     machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=0)
     machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=100)
 
-    state = machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=200)
+    state = machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=200).state
 
     assert state == AnimationState.MOVE
 
@@ -127,8 +127,8 @@ def test_different_pieces_are_tracked_independently():
     machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=0)
     machine.state_for(piece("p2", AnimationState.JUMP), clock_ms=0)
 
-    state1 = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=50)
-    state2 = machine.state_for(piece("p2", AnimationState.IDLE), clock_ms=50)
+    state1 = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=50).state
+    state2 = machine.state_for(piece("p2", AnimationState.IDLE), clock_ms=50).state
 
     assert state1 == AnimationState.LONG_REST
     assert state2 == AnimationState.SHORT_REST
@@ -141,8 +141,56 @@ def test_forget_makes_the_next_sighting_look_brand_new():
 
     machine.forget("p1")
 
-    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=150)
+    state = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=150).state
     assert state == AnimationState.IDLE
+
+
+def test_elapsed_ms_is_zero_on_first_sighting_of_a_state():
+    machine = PieceStateMachine(_FakeLibrary())
+    progress = machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=1000)
+    assert progress.elapsed_ms == 0.0
+
+
+def test_elapsed_ms_grows_while_the_state_stays_the_same():
+    machine = PieceStateMachine(_FakeLibrary())
+    machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=1000)
+
+    progress = machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=1300)
+
+    assert progress.elapsed_ms == 300
+
+
+def test_elapsed_ms_resets_to_zero_when_the_state_changes():
+    machine = PieceStateMachine(_FakeLibrary())
+    machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=1000)
+    machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=1500)
+
+    # move -> long_rest per _FakeLibrary's chain, once engine reports idle.
+    progress = machine.state_for(piece("p1", AnimationState.IDLE), clock_ms=1600)
+
+    assert progress.elapsed_ms == 0.0
+
+
+def test_elapsed_ms_is_tracked_independently_per_piece():
+    machine = PieceStateMachine(_FakeLibrary())
+    machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=1000)
+    machine.state_for(piece("p2", AnimationState.JUMP), clock_ms=1000)
+
+    progress1 = machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=1200)
+    progress2 = machine.state_for(piece("p2", AnimationState.JUMP), clock_ms=1200)
+
+    assert progress1.elapsed_ms == 200
+    assert progress2.elapsed_ms == 200
+
+
+def test_forget_makes_the_next_sightings_elapsed_ms_start_over():
+    machine = PieceStateMachine(_FakeLibrary())
+    machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=1000)
+
+    machine.forget("p1")
+
+    progress = machine.state_for(piece("p1", AnimationState.MOVE), clock_ms=5000)
+    assert progress.elapsed_ms == 0.0
 
 
 @requires_pieces_dir
@@ -155,9 +203,9 @@ def test_against_the_real_asset_library_move_transitions_through_long_rest_to_id
     state = machine.state_for(
         piece("wq1", AnimationState.IDLE, color=PieceColor.WHITE, kind=PieceKind.QUEEN),
         clock_ms=10,
-    )
+    ).state
     assert state == AnimationState.LONG_REST
 
     idle_snapshot = piece("wq1", AnimationState.IDLE, color=PieceColor.WHITE, kind=PieceKind.QUEEN)
-    state = machine.state_for(idle_snapshot, clock_ms=2000)
+    state = machine.state_for(idle_snapshot, clock_ms=2000).state
     assert state == AnimationState.IDLE

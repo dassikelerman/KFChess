@@ -88,12 +88,10 @@ def test_render_forgets_a_piece_that_disappears_from_the_snapshot():
     view = make_view()
 
     view.render(ui_snapshot([piece(is_moving=True, is_jumping=False)], clock_ms=0))
-    assert "wq1" in view._animator._entered_at
     assert "wq1" in view._state_machine._entries
 
     view.render(ui_snapshot([], clock_ms=10))  # the piece was captured/removed
 
-    assert "wq1" not in view._animator._entered_at
     assert "wq1" not in view._state_machine._entries
 
 
