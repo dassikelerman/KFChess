@@ -11,8 +11,7 @@ import cv2
 import constants
 from app.game_builder import build_game
 from view.piece_animations import AnimationLibrary
-from input.board_mapper import BoardMapper
-from input.controller import Controller
+from input.controller_builder import build_controller
 from view.game_ui_snapshot import build_ui_snapshot
 from view.game_view import GameView
 
@@ -22,14 +21,11 @@ def run(board_text=None):
     engine = game.engine
 
     # The GUI's own click-to-cell mapping needs to know about the side
-    # panels shifting the board right - GameComponents.board_mapper
-    # itself stays offset-free since text mode shares the same
-    # build_game() and has no panels at all.
-    board_mapper = BoardMapper(
-        cell_size=constants.CELL_SIZE, board_width=game.board.width, board_height=game.board.height,
-        x_offset=constants.PANEL_WIDTH,
+    # panels shifting the board right - text/run.py builds its own
+    # controller with zero offsets since it has no panels at all.
+    controller = build_controller(
+        engine, game.board, cell_size=constants.CELL_SIZE, x_offset=constants.PANEL_WIDTH,
     )
-    controller = Controller(engine, board_mapper)
 
     view = GameView(
         constants.BOARD_IMAGE_PATH,

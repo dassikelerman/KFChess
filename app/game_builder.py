@@ -7,7 +7,6 @@ from engine.game_engine import GameEngine
 from events.action_history import ActionHistory
 from events.dispatcher import EventDispatcher
 from events.score_tracker import ScoreTracker
-from input.board_mapper import BoardMapper
 from realtime.real_time_arbiter import RealTimeArbiter
 from rules.rule_engine import RuleEngine, build_default_registry
 
@@ -16,7 +15,6 @@ from rules.rule_engine import RuleEngine, build_default_registry
 class GameComponents:
     engine: GameEngine
     board: object  # model.board.Board
-    board_mapper: BoardMapper
     dispatcher: EventDispatcher
     score_tracker: ScoreTracker
     action_history: ActionHistory
@@ -42,11 +40,7 @@ def build_game(board_text):
         short_rest_duration=constants.SHORT_REST_DURATION,
         dispatcher=dispatcher,
     )
-    board_mapper = BoardMapper(
-        cell_size=constants.CELL_SIZE, board_width=board.width, board_height=board.height
-    )
-
     return GameComponents(
-        engine=engine, board=board, board_mapper=board_mapper,
+        engine=engine, board=board,
         dispatcher=dispatcher, score_tracker=score_tracker, action_history=action_history,
     )
