@@ -35,7 +35,8 @@ def run(board_text=None):
     # panels shifting the board right - text/run.py builds its own
     # controller with zero offsets since it has no panels at all.
     controller = build_controller(
-        engine, game.board, cell_size=constants.CELL_SIZE, x_offset=constants.PANEL_WIDTH,
+        engine, engine, game.board.width, game.board.height,
+        cell_size=constants.CELL_SIZE, x_offset=constants.PANEL_WIDTH,
     )
 
     view = GameView(

@@ -1,4 +1,5 @@
 from model.board import Board
+from model.position import Position
 from engine.game_conditions import KingCaptureWinCondition, LastRankPromotion
 from engine.game_engine import GameEngine
 from input.controller import Controller
@@ -44,14 +45,59 @@ def test_game_engine_satisfies_the_action_sink_and_state_reader_shapes():
 def test_build_controller_returns_a_controller():
     engine, board = make_engine([["wK", "."], [".", "."]])
 
-    controller = build_controller(engine, board, cell_size=CELL_SIZE)
+    controller = build_controller(engine, engine, board.width, board.height, cell_size=CELL_SIZE)
 
     assert isinstance(controller, Controller)
 
 
+class _FakePiece:
+    def __init__(self, piece_id):
+        self.id = piece_id
+
+
+class _FakeStateReader:
+    """Stands in for client/snapshot_view.py::SnapshotView - board_width and
+    board_height are taken as plain ints rather than read off a Board, since
+    the network client only has a GameSnapshot, not a real Board."""
+
+    def __init__(self, piece_at_origin):
+        self.game_over = False
+        self._piece_at_origin = piece_at_origin
+
+    def piece_at(self, pos):
+        return self._piece_at_origin if pos == Position(0, 0) else None
+
+    def is_busy(self, pos):
+        return False
+
+
+class _FakeActionSink:
+    def __init__(self):
+        self.moves = []
+
+    def request_move(self, source, destination):
+        self.moves.append((source, destination))
+
+    def request_jump(self, position):
+        pass
+
+
+def test_build_controller_works_with_a_distinct_action_sink_and_state_reader():
+    # Mirrors client/run.py: ws_client (ActionSink) and snapshot_view
+    # (GameStateReader) are two different objects, unlike the local flows
+    # where the same GameEngine plays both roles.
+    action_sink = _FakeActionSink()
+    state_reader = _FakeStateReader(piece_at_origin=_FakePiece("some-piece"))
+    controller = build_controller(action_sink, state_reader, board_width=2, board_height=2, cell_size=CELL_SIZE)
+
+    controller.click(0, 0)
+
+    assert controller.selected == (0, 0)
+
+
 def test_zero_offset_maps_clicks_directly_to_board_cells():
     engine, board = make_engine([["wK", "."], [".", "."]])
-    controller = build_controller(engine, board, cell_size=CELL_SIZE)
+    controller = build_controller(engine, engine, board.width, board.height, cell_size=CELL_SIZE)
 
     controller.click(0, 0)
 
@@ -60,7 +106,9 @@ def test_zero_offset_maps_clicks_directly_to_board_cells():
 
 def test_x_offset_shifts_the_boards_click_mapping_right():
     engine, board = make_engine([["wK", "."], [".", "."]])
-    controller = build_controller(engine, board, cell_size=CELL_SIZE, x_offset=220)
+    controller = build_controller(
+        engine, engine, board.width, board.height, cell_size=CELL_SIZE, x_offset=220,
+    )
 
     # A raw click at the panel offset lands on the board's own local (0, 0).
     controller.click(220, 0)
@@ -69,7 +117,9 @@ def test_x_offset_shifts_the_boards_click_mapping_right():
 
 def test_x_offset_click_inside_the_panel_selects_nothing():
     engine, board = make_engine([["wK", "."], [".", "."]])
-    controller = build_controller(engine, board, cell_size=CELL_SIZE, x_offset=220)
+    controller = build_controller(
+        engine, engine, board.width, board.height, cell_size=CELL_SIZE, x_offset=220,
+    )
 
     # A click before the offset falls inside the panel, not the board.
     controller.click(50, 0)
@@ -79,7 +129,9 @@ def test_x_offset_click_inside_the_panel_selects_nothing():
 
 def test_y_offset_shifts_the_boards_click_mapping_down():
     engine, board = make_engine([["wK", "."], [".", "."]])
-    controller = build_controller(engine, board, cell_size=CELL_SIZE, y_offset=50)
+    controller = build_controller(
+        engine, engine, board.width, board.height, cell_size=CELL_SIZE, y_offset=50,
+    )
 
     controller.click(0, 50)
 
@@ -88,7 +140,9 @@ def test_y_offset_shifts_the_boards_click_mapping_down():
 
 def test_y_offset_click_above_the_board_selects_nothing():
     engine, board = make_engine([["wK", "."], [".", "."]])
-    controller = build_controller(engine, board, cell_size=CELL_SIZE, y_offset=50)
+    controller = build_controller(
+        engine, engine, board.width, board.height, cell_size=CELL_SIZE, y_offset=50,
+    )
 
     controller.click(0, 0)
 

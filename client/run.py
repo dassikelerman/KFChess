@@ -21,8 +21,7 @@ from events.action_history import ActionHistory
 from events.dispatcher import EventDispatcher
 from events.score_tracker import ScoreTracker
 from events.sound_system import SOUND_FILE_BY_EVENT, SoundSystem
-from input.board_mapper import BoardMapper
-from input.controller import Controller
+from input.controller_builder import build_controller
 from view.game_ui_snapshot import GameUiSnapshot
 from view.game_view import GameView
 from view.piece_animations import AnimationLibrary
@@ -73,11 +72,10 @@ def run(ws_url):
     # reads state through snapshot_view instead of a real GameEngine, and
     # sends actions through ws_client instead of calling the engine
     # directly, but Controller itself doesn't know the difference.
-    board_mapper = BoardMapper(
-        cell_size=constants.CELL_SIZE, board_width=game_snapshot.board_width,
-        board_height=game_snapshot.board_height, x_offset=constants.PANEL_WIDTH,
+    controller = build_controller(
+        ws_client, snapshot_view, game_snapshot.board_width, game_snapshot.board_height,
+        cell_size=constants.CELL_SIZE, x_offset=constants.PANEL_WIDTH,
     )
-    controller = Controller(action_sink=ws_client, state_reader=snapshot_view, board_mapper=board_mapper)
 
     cv2.namedWindow(constants.WINDOW_NAME)
     cv2.setMouseCallback(

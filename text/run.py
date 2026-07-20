@@ -18,7 +18,9 @@ def run(input_lines):
         print("ERROR", error)
         return
 
-    controller = build_controller(game.engine, game.board, cell_size=constants.CELL_SIZE)
+    controller = build_controller(
+        game.engine, game.engine, game.board.width, game.board.height, cell_size=constants.CELL_SIZE,
+    )
     printer = BoardPrinter(empty_token=constants.EMPTY_CELL)
     runner = ScriptRunner(controller, game.engine, printer)
     commands = parse_script(command_lines)
