@@ -1,7 +1,8 @@
-"""WebSocket entry point for the KFChess server - step 3 of the
+"""WebSocket entry point for the KFChess server - step 5 of the
 client/server migration (docs/kf-chess-architecture-plan.md). Accepts
-connections, assigns seats, ticks the engine, and broadcasts state.
-No move/jump handling and no ownership enforcement yet - later steps.
+connections, assigns seats, ticks the engine, broadcasts state, and now
+routes incoming client intents to the engine. No ownership enforcement
+yet - see the TODO in server/session.py::handle_client_message.
 
 Run as a module from the project root: python -m server.ws_server
 """
@@ -40,9 +41,13 @@ async def _handle_connection(connection, session, network_publisher, connections
         await connection.send(json.dumps(network_publisher.snapshot_payload(session.components)))
 
         async for message in connection:
-            # Move/jump handling is a later step - for now, just observe
-            # what clients send.
-            logger.info("received message (role=%s): %s", role, message)
+            try:
+                session.handle_client_message(connection, json.loads(message))
+            except Exception:
+                # A malformed/undecodable message shouldn't take down this
+                # connection or the tick loop over one bad message - log
+                # and move on.
+                logger.exception("failed to handle message (role=%s): %s", role, message)
     finally:
         connections.discard(connection)
         logger.info("connection closed (role=%s, %d still connected)", role, len(connections))

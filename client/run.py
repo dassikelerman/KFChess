@@ -1,7 +1,8 @@
-"""Client entry point, step 4 of the client/server migration
-(docs/kf-chess-architecture-plan.md): connects, receives state, and
-renders it. No mouse handling and no move/jump sending yet - Controller
-isn't wired in until Step 5, so there's no cv2.setMouseCallback here.
+"""Client entry point, step 5 of the client/server migration
+(docs/kf-chess-architecture-plan.md): connects, receives state, renders
+it, and now sends real moves/jumps through the same Controller
+view/run.py uses - WsClient satisfies ActionSink, SnapshotView
+satisfies GameStateReader (both Protocols in input/controller.py).
 
 Run as a module from the project root: python -m client.run <ws_url>
 """
@@ -20,6 +21,8 @@ from events.action_history import ActionHistory
 from events.dispatcher import EventDispatcher
 from events.score_tracker import ScoreTracker
 from events.sound_system import SOUND_FILE_BY_EVENT, SoundSystem
+from input.board_mapper import BoardMapper
+from input.controller import Controller
 from view.game_ui_snapshot import GameUiSnapshot
 from view.game_view import GameView
 from view.piece_animations import AnimationLibrary
@@ -48,8 +51,8 @@ def run(ws_url):
     # board does locally in view/run.py - here that only exists once the
     # server's first snapshot arrives, so block for it before building
     # the window at all. The server sends a "role" message first
-    # (server/ws_server.py); it's not acted on yet since Controller/
-    # ownership isn't wired in until Step 5, so it's skipped here too.
+    # (server/ws_server.py); it's not acted on yet since ownership
+    # enforcement is Step 6, so it's skipped here too.
     game_snapshot = None
     while game_snapshot is None:
         item = ws_client.inbound.get()
@@ -66,10 +69,24 @@ def run(ws_url):
         panel_width=constants.PANEL_WIDTH,
     )
 
+    # Same click-to-cell mapping view/run.py builds locally - the client
+    # reads state through snapshot_view instead of a real GameEngine, and
+    # sends actions through ws_client instead of calling the engine
+    # directly, but Controller itself doesn't know the difference.
+    board_mapper = BoardMapper(
+        cell_size=constants.CELL_SIZE, board_width=game_snapshot.board_width,
+        board_height=game_snapshot.board_height, x_offset=constants.PANEL_WIDTH,
+    )
+    controller = Controller(action_sink=ws_client, state_reader=snapshot_view, board_mapper=board_mapper)
+
     cv2.namedWindow(constants.WINDOW_NAME)
+    cv2.setMouseCallback(
+        constants.WINDOW_NAME, lambda event, x, y, flags, userdata: _on_mouse(controller, event, x, y)
+    )
 
     while True:
         _drain_inbound(ws_client, snapshot_view, dispatcher)
+        controller.refresh_selection()
 
         for filename in sound_system.drain_pending():
             winsound.PlaySound(sound_paths[filename], winsound.SND_FILENAME | winsound.SND_ASYNC)
@@ -77,7 +94,7 @@ def run(ws_url):
         ui_snapshot = GameUiSnapshot(
             game=snapshot_view.snapshot(),
             clock_ms=snapshot_view.clock,
-            selected=None,
+            selected=controller.selected,
             score=score_tracker.snapshot(),
             recent_actions=action_history.recent(),
         )
@@ -108,7 +125,14 @@ def _drain_inbound(ws_client, snapshot_view, dispatcher):
         elif kind == "event":
             _, event = item
             dispatcher.publish(event)
-        # "role" items aren't acted on yet - Step 5 wires ownership.
+        # "role" items aren't acted on yet - ownership enforcement is Step 6.
+
+
+def _on_mouse(controller, event, x, y):
+    if event == cv2.EVENT_LBUTTONDOWN:
+        controller.click(x, y)
+    elif event == cv2.EVENT_RBUTTONDOWN:
+        controller.jump(x, y)
 
 
 def main():
