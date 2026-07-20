@@ -20,14 +20,17 @@ class GameUiSnapshot:
     recent_actions: List[ActionEntry]
 
 
-def build_ui_snapshot(engine, controller, score_tracker, action_history, recent_action_count=None):
+def build_ui_snapshot(state_source, controller, score_tracker, action_history, recent_action_count=None):
+    """state_source only needs snapshot() and .clock - GameEngine (local
+    flows) and client/snapshot_view.py::SnapshotView (network flow) both
+    provide that, nothing more, so either can be passed here."""
     recent_actions = (
         action_history.recent() if recent_action_count is None
         else action_history.recent(recent_action_count)
     )
     return GameUiSnapshot(
-        game=engine.snapshot(),
-        clock_ms=engine.clock,
+        game=state_source.snapshot(),
+        clock_ms=state_source.clock,
         selected=controller.selected,
         score=score_tracker.snapshot(),
         recent_actions=recent_actions,

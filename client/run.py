@@ -22,7 +22,7 @@ from events.dispatcher import EventDispatcher
 from events.score_tracker import ScoreTracker
 from events.sound_system import SOUND_FILE_BY_EVENT, SoundSystem
 from input.controller_builder import build_controller
-from view.game_ui_snapshot import GameUiSnapshot
+from view.game_ui_snapshot import build_ui_snapshot
 from view.game_view import GameView
 from view.piece_animations import AnimationLibrary
 
@@ -89,13 +89,7 @@ def run(ws_url):
         for filename in sound_system.drain_pending():
             winsound.PlaySound(sound_paths[filename], winsound.SND_FILENAME | winsound.SND_ASYNC)
 
-        ui_snapshot = GameUiSnapshot(
-            game=snapshot_view.snapshot(),
-            clock_ms=snapshot_view.clock,
-            selected=controller.selected,
-            score=score_tracker.snapshot(),
-            recent_actions=action_history.recent(),
-        )
+        ui_snapshot = build_ui_snapshot(snapshot_view, controller, score_tracker, action_history)
         frame = view.render(ui_snapshot)
         frame.show(constants.WINDOW_NAME)
 

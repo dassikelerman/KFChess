@@ -98,3 +98,26 @@ def test_game_ui_snapshot_is_a_separate_object_from_the_engines_own_snapshot():
     assert not hasattr(plain_snapshot, "score")
     assert not hasattr(plain_snapshot, "recent_actions")
     assert ui_snapshot.game.pieces == plain_snapshot.pieces
+
+
+class _FakeStateSource:
+    """Stands in for client/snapshot_view.py::SnapshotView - build_ui_snapshot
+    must work off just snapshot()/clock, the same two operations GameEngine
+    exposes, with nothing else GameEngine-specific."""
+
+    def __init__(self, snapshot, clock_ms):
+        self._snapshot = snapshot
+        self.clock = clock_ms
+
+    def snapshot(self):
+        return self._snapshot
+
+
+def test_build_ui_snapshot_works_with_a_non_engine_state_source():
+    engine, controller, score_tracker, action_history = make()
+    fake_source = _FakeStateSource(snapshot=engine.snapshot(), clock_ms=1234)
+
+    ui_snapshot = build_ui_snapshot(fake_source, controller, score_tracker, action_history)
+
+    assert ui_snapshot.game == fake_source.snapshot()
+    assert ui_snapshot.clock_ms == 1234
