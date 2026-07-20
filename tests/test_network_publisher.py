@@ -65,12 +65,15 @@ def test_broadcast_fn_receives_nothing_until_an_event_is_published():
     assert broadcast == []
 
 
-def test_snapshot_payload_returns_the_engines_snapshot_as_a_plain_dict():
+def test_snapshot_payload_returns_the_engines_snapshot_plus_the_clock():
     game = build_game(["wK .", ". ."])
     dispatcher = EventDispatcher()
     publisher = NetworkPublisher(dispatcher, broadcast_fn=lambda payload: None)
 
     payload = publisher.snapshot_payload(game)
 
-    assert payload == to_dict(game.engine.snapshot())
+    expected = to_dict(game.engine.snapshot())
+    expected["clock_ms"] = game.engine.clock
+    assert payload == expected
     assert payload["type"] == "GameSnapshot"
+    assert payload["clock_ms"] == game.engine.clock

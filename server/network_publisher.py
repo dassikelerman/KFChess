@@ -38,4 +38,6 @@ class NetworkPublisher:
         self._broadcast_fn(to_dict(event))
 
     def snapshot_payload(self, components):
-        return to_dict(components.engine.snapshot())
+        payload = to_dict(components.engine.snapshot())
+        payload["clock_ms"] = components.engine.clock
+        return payload
