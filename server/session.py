@@ -1,13 +1,11 @@
-"""Step 7 of the client/server migration (docs/kf-chess-architecture-plan.md):
+"""Step 6 of the client/server migration (docs/kf-chess-architecture-plan.md):
 a single game/room, wrapping GameComponents, enforcing color ownership
-on every client intent - with an explicit, off-by-default escape hatch
-for a single dev connection to control both colors. network_publisher
-is wired in by the caller after construction (see
-server/ws_server.py::main - it in turn needs this Session's own
-dispatcher to build) - handle_client_message uses it to unicast a
-rejection straight back to whichever connection sent it, whether the
-rejection came from the ownership check here or from GameEngine's own
-ActionResult; never broadcast."""
+on every client intent. network_publisher is wired in by the caller
+after construction (see server/ws_server.py::main - it in turn needs
+this Session's own dispatcher to build) - handle_client_message uses
+it to unicast a rejection straight back to whichever connection sent
+it, whether the rejection came from the ownership check here or from
+GameEngine's own ActionResult; never broadcast."""
 
 from app.game_builder import build_game
 from events.game_events import IllegalActionEvent
@@ -20,11 +18,10 @@ _COLOR_BY_ROLE = {"white": PieceColor.WHITE, "black": PieceColor.BLACK}
 
 
 class Session:
-    def __init__(self, board_text, *, allow_single_client_both_colors=False):
+    def __init__(self, board_text):
         self.components = build_game(board_text)
         self.network_publisher = None  # wired in by the caller - see server/ws_server.py
         self._roles = {}  # connection -> role, in assignment order
-        self._allow_single_client_both_colors = allow_single_client_both_colors
 
     def assign_role(self, connection):
         if connection not in self._roles:
@@ -72,16 +69,7 @@ class Session:
 
     def _connection_owns_color(self, connection, color):
         role = self._roles.get(connection)
-        if _COLOR_BY_ROLE.get(role) == color:
-            return True
-        # Dev-only escape hatch, off by default: lets one connection play
-        # both sides without opening two windows. Assumes exactly one
-        # real connection is ever attached this way - it isn't designed
-        # to coexist correctly with a second real player joining at the
-        # same time, and that's fine/expected for a dev-only flag.
-        if self._allow_single_client_both_colors and role == "white" and color == PieceColor.BLACK:
-            return True
-        return False
+        return _COLOR_BY_ROLE.get(role) == color
 
     def _reject(self, connection, piece, destination):
         event = IllegalActionEvent(

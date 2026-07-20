@@ -1,17 +1,13 @@
-"""WebSocket entry point for the KFChess server - step 7 of the
+"""WebSocket entry point for the KFChess server - step 6 of the
 client/server migration (docs/kf-chess-architecture-plan.md). Accepts
 connections, assigns seats, ticks the engine, broadcasts state, routes
 incoming client intents to the engine, and enforces color ownership
 (server/session.py) - a rejection is unicast straight back to whichever
-connection sent it, never broadcast. --dev-single-client opts a single
-connection into controlling both colors, for manual testing without
-opening two windows; off by default.
+connection sent it, never broadcast.
 
 Run as a module from the project root: python -m server.ws_server
-                                    or: python -m server.ws_server --dev-single-client
 """
 
-import argparse
 import asyncio
 import json
 import logging
@@ -79,10 +75,8 @@ async def _tick_loop(session, network_publisher, connections):
         _broadcast(connections, network_publisher.snapshot_payload(session.components))
 
 
-async def main(dev_single_client=False):
-    session = Session(
-        constants.STANDARD_START_BOARD, allow_single_client_both_colors=dev_single_client,
-    )
+async def main():
+    session = Session(constants.STANDARD_START_BOARD)
     connections = set()
     network_publisher = NetworkPublisher(
         session.components.dispatcher, lambda payload: _broadcast(connections, payload), _unicast,
@@ -97,16 +91,5 @@ async def main(dev_single_client=False):
         await _tick_loop(session, network_publisher, connections)
 
 
-def _parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--dev-single-client", action="store_true",
-        help="let one connection control both white and black - for manual testing "
-             "without opening two windows. Off by default.",
-    )
-    return parser.parse_args()
-
-
 if __name__ == "__main__":
-    args = _parse_args()
-    asyncio.run(main(dev_single_client=args.dev_single_client))
+    asyncio.run(main())
