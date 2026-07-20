@@ -1,8 +1,9 @@
-"""WebSocket entry point for the KFChess server - step 5 of the
+"""WebSocket entry point for the KFChess server - step 6 of the
 client/server migration (docs/kf-chess-architecture-plan.md). Accepts
-connections, assigns seats, ticks the engine, broadcasts state, and now
-routes incoming client intents to the engine. No ownership enforcement
-yet - see the TODO in server/session.py::handle_client_message.
+connections, assigns seats, ticks the engine, broadcasts state, routes
+incoming client intents to the engine, and now enforces color
+ownership (server/session.py) - a rejection is unicast straight back
+to whichever connection sent it, never broadcast.
 
 Run as a module from the project root: python -m server.ws_server
 """
@@ -29,6 +30,14 @@ logger = logging.getLogger(__name__)
 def _broadcast(connections, payload):
     if connections:
         websockets.broadcast(connections, json.dumps(payload))
+
+
+def _unicast(connection, payload):
+    # session.handle_client_message() (and NetworkPublisher.unicast())
+    # call this synchronously - connection.send() is a coroutine, so it's
+    # scheduled as a task on the loop this function is called from rather
+    # than awaited directly here.
+    asyncio.create_task(connection.send(json.dumps(payload)))
 
 
 async def _handle_connection(connection, session, network_publisher, connections):
@@ -70,8 +79,9 @@ async def main():
     session = Session(constants.STANDARD_START_BOARD)
     connections = set()
     network_publisher = NetworkPublisher(
-        session.components.dispatcher, lambda payload: _broadcast(connections, payload),
+        session.components.dispatcher, lambda payload: _broadcast(connections, payload), _unicast,
     )
+    session.network_publisher = network_publisher
 
     async def handler(connection):
         await _handle_connection(connection, session, network_publisher, connections)

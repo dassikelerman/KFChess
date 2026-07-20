@@ -16,7 +16,7 @@ from server.network_publisher import NetworkPublisher
 
 AT = Position(0, 0)
 
-SAMPLE_EVENTS = [
+BROADCAST_SAMPLE_EVENTS = [
     MoveCompletedEvent(
         piece_id="p1", piece_kind=PieceKind.ROOK, piece_color=PieceColor.WHITE,
         destination=AT, at_ms=100,
@@ -40,35 +40,63 @@ SAMPLE_EVENTS = [
         at=AT, at_ms=500,
     ),
     GameOverEvent(winner_color=PieceColor.BLACK, at_ms=600),
-    IllegalActionEvent(piece_id="p1", destination=AT, at_ms=700),
 ]
+
+ILLEGAL_ACTION_SAMPLE = IllegalActionEvent(piece_id="p1", destination=AT, at_ms=700)
 
 
 def make_publisher():
     dispatcher = EventDispatcher()
     broadcast = []
-    NetworkPublisher(dispatcher, broadcast.append)
-    return dispatcher, broadcast
+    unicast_calls = []
+    NetworkPublisher(
+        dispatcher, broadcast.append,
+        lambda connection, payload: unicast_calls.append((connection, payload)),
+    )
+    return dispatcher, broadcast, unicast_calls
 
 
-def test_each_game_event_type_is_broadcast_as_its_to_dict_form():
-    dispatcher, broadcast = make_publisher()
+def test_each_domain_game_event_type_is_broadcast_as_its_to_dict_form():
+    dispatcher, broadcast, _ = make_publisher()
 
-    for event in SAMPLE_EVENTS:
+    for event in BROADCAST_SAMPLE_EVENTS:
         dispatcher.publish(event)
 
-    assert broadcast == [to_dict(event) for event in SAMPLE_EVENTS]
+    assert broadcast == [to_dict(event) for event in BROADCAST_SAMPLE_EVENTS]
 
 
 def test_broadcast_fn_receives_nothing_until_an_event_is_published():
-    dispatcher, broadcast = make_publisher()
+    dispatcher, broadcast, _ = make_publisher()
+    assert broadcast == []
+
+
+def test_illegal_action_event_published_on_the_dispatcher_does_not_broadcast():
+    # IllegalActionEvent is unicast-only (server/session.py builds and
+    # unicasts it directly) - even if something else were to publish one
+    # on the shared dispatcher, NetworkPublisher must not broadcast it.
+    dispatcher, broadcast, unicast_calls = make_publisher()
+
+    dispatcher.publish(ILLEGAL_ACTION_SAMPLE)
+
+    assert broadcast == []
+    assert unicast_calls == []
+
+
+def test_unicast_calls_unicast_fn_with_exactly_that_connection_and_the_serialized_event():
+    broadcast = []
+    unicast_calls = []
+    publisher = NetworkPublisher(EventDispatcher(), broadcast.append, lambda c, p: unicast_calls.append((c, p)))
+
+    publisher.unicast("conn-a", ILLEGAL_ACTION_SAMPLE)
+
+    assert unicast_calls == [("conn-a", to_dict(ILLEGAL_ACTION_SAMPLE))]
     assert broadcast == []
 
 
 def test_snapshot_payload_returns_the_engines_snapshot_plus_the_clock():
     game = build_game(["wK .", ". ."])
     dispatcher = EventDispatcher()
-    publisher = NetworkPublisher(dispatcher, broadcast_fn=lambda payload: None)
+    publisher = NetworkPublisher(dispatcher, broadcast_fn=lambda payload: None, unicast_fn=lambda c, p: None)
 
     payload = publisher.snapshot_payload(game)
 

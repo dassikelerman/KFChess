@@ -1,18 +1,26 @@
-"""Step 5 of the client/server migration (docs/kf-chess-architecture-plan.md):
-a single game/room, wrapping GameComponents. Handles client intents now;
-ownership enforcement (rejecting a move/jump sent by the wrong color)
-is still not implemented - see the TODO on handle_client_message."""
+"""Step 6 of the client/server migration (docs/kf-chess-architecture-plan.md):
+a single game/room, wrapping GameComponents, now enforcing color
+ownership on every client intent. network_publisher is wired in by the
+caller after construction (see server/ws_server.py::main - it in turn
+needs this Session's own dispatcher to build) - handle_client_message
+uses it to unicast a rejection straight back to whichever connection
+sent it, whether the rejection came from the ownership check here or
+from GameEngine's own ActionResult; never broadcast."""
 
 from app.game_builder import build_game
+from events.game_events import IllegalActionEvent
 from events.serialization import JumpIntent, MoveIntent, from_dict
+from model.piece import PieceColor
 
 _ROLES_BY_INDEX = ("white", "black")
 SPECTATOR_ROLE = "spectator"
+_COLOR_BY_ROLE = {"white": PieceColor.WHITE, "black": PieceColor.BLACK}
 
 
 class Session:
     def __init__(self, board_text):
         self.components = build_game(board_text)
+        self.network_publisher = None  # wired in by the caller - see server/ws_server.py
         self._roles = {}  # connection -> role, in assignment order
 
     def assign_role(self, connection):
@@ -26,14 +34,42 @@ class Session:
         self.components.engine.wait(dt_ms)
 
     def handle_client_message(self, connection, message_dict):
-        # TODO(Step 6): check self._roles[connection] against the piece's
-        # own color before calling request_move/request_jump below, and
-        # reject (publish IllegalActionEvent, unicast to `connection`)
-        # if they don't match - not implemented yet, every connection's
-        # intent is routed straight to the engine regardless of role.
         intent = from_dict(message_dict)
-        engine = self.components.engine
         if isinstance(intent, MoveIntent):
-            engine.request_move(intent.source, intent.destination)
+            self._handle_move(connection, intent)
         elif isinstance(intent, JumpIntent):
-            engine.request_jump(intent.position)
+            self._handle_jump(connection, intent)
+
+    def _handle_move(self, connection, intent):
+        engine = self.components.engine
+        piece = engine.piece_at(intent.source)
+        if not self._owns(connection, piece):
+            self._reject(connection, piece, intent.source)
+            return
+
+        result = engine.request_move(intent.source, intent.destination)
+        if not result.is_accepted:
+            self._reject(connection, piece, intent.destination)
+
+    def _handle_jump(self, connection, intent):
+        engine = self.components.engine
+        piece = engine.piece_at(intent.position)
+        if not self._owns(connection, piece):
+            self._reject(connection, piece, intent.position)
+            return
+
+        result = engine.request_jump(intent.position)
+        if not result.is_accepted:
+            self._reject(connection, piece, intent.position)
+
+    def _owns(self, connection, piece):
+        if piece is None:
+            return False
+        return _COLOR_BY_ROLE.get(self._roles.get(connection)) == piece.color
+
+    def _reject(self, connection, piece, destination):
+        event = IllegalActionEvent(
+            piece_id=piece.id if piece is not None else None,
+            destination=destination, at_ms=self.components.engine.clock,
+        )
+        self.network_publisher.unicast(connection, event)
