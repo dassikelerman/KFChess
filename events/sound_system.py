@@ -20,7 +20,7 @@ class SoundSystem:
     directly in the callback - dispatcher.publish() runs the callback
     synchronously on the publisher's own thread, so anything blocking
     (audio I/O) there would stall it, and a future networked GameEngine
-    may publish from a thread that isn't safe to touch pygame.mixer
+    may publish from a thread that isn't safe to touch an audio API
     from. A renderer drains and plays the queue separately, once per
     frame, from its own loop."""
 
