@@ -29,7 +29,7 @@ def make():
         dispatcher=dispatcher,
     )
     board_mapper = BoardMapper(CELL_SIZE, board.width, board.height)
-    controller = Controller(engine, board_mapper)
+    controller = Controller(action_sink=engine, state_reader=engine, board_mapper=board_mapper)
     return engine, controller, score_tracker, action_history
 
 

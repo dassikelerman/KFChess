@@ -26,6 +26,21 @@ def make_engine(rows):
     return engine, board
 
 
+def test_game_engine_satisfies_the_action_sink_and_state_reader_shapes():
+    engine, board = make_engine([["wK", "."], [".", "."]])
+
+    # ActionSink/GameStateReader (input/controller.py) aren't
+    # @runtime_checkable, so isinstance() can't confirm this - duck-type
+    # check instead, against exactly what Controller calls through each
+    # collaborator. GameEngine satisfies both Protocols structurally,
+    # with no inheritance from either.
+    assert callable(engine.request_move)
+    assert callable(engine.request_jump)
+    assert callable(engine.piece_at)
+    assert callable(engine.is_busy)
+    assert isinstance(engine.game_over, bool)
+
+
 def test_build_controller_returns_a_controller():
     engine, board = make_engine([["wK", "."], [".", "."]])
 

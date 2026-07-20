@@ -78,7 +78,7 @@ def make_engine(
         short_rest_duration=short_rest_duration,
     )
     board_mapper = BoardMapper(CELL_SIZE, board.width, board.height)
-    controller = Controller(engine, board_mapper)
+    controller = Controller(action_sink=engine, state_reader=engine, board_mapper=board_mapper)
     return engine, controller, board
 
 
