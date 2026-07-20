@@ -10,6 +10,7 @@ from events.dispatcher import EventDispatcher
 from events.game_events import (
     CaptureEvent,
     GameOverEvent,
+    IllegalActionEvent,
     JumpCompletedEvent,
     MotionStoppedEvent,
     MoveCompletedEvent,
@@ -210,6 +211,84 @@ def test_capture_event_also_publishes_for_the_arrival_that_ends_the_game():
 
     assert [type(e) for e in events] == [CaptureEvent, GameOverEvent]
     assert events[0].captured_kind == PieceKind.KING
+
+
+# -- Illegal action -----------------------------------------------------
+
+
+def test_illegal_action_event_publishes_when_a_move_is_rejected_as_illegal():
+    engine, board, dispatcher = make_engine([["wN", ".", "."]])
+    events = collect(dispatcher, IllegalActionEvent)
+
+    # A knight can't move one cell in a straight line.
+    result = engine.request_move(Position(0, 0), Position(0, 1))
+
+    assert result.is_accepted is False
+    assert len(events) == 1
+    assert events[0].piece_id == "wN@0,0"
+    assert events[0].destination == Position(0, 1)
+
+
+def test_illegal_action_event_publishes_when_a_move_source_is_jump_guarded():
+    engine, board, dispatcher = make_engine([["wR", ".", "."]])
+    engine.request_jump(Position(0, 0))
+    events = collect(dispatcher, IllegalActionEvent)
+
+    result = engine.request_move(Position(0, 0), Position(0, 2))
+
+    assert result.is_accepted is False
+    assert len(events) == 1
+    assert events[0].piece_id == "wR@0,0"
+
+
+def test_illegal_action_event_publishes_when_a_move_source_is_resting():
+    engine, board, dispatcher = make_engine([["wR", ".", "."]], long_rest_duration=1000)
+    engine.request_move(Position(0, 0), Position(0, 1))
+    engine.wait(MOVE_DURATION)  # lands, starts its long rest
+    events = collect(dispatcher, IllegalActionEvent)
+
+    result = engine.request_move(Position(0, 1), Position(0, 2))
+
+    assert result.is_accepted is False
+    assert len(events) == 1
+
+
+def test_illegal_action_event_publishes_with_no_piece_id_for_a_jump_on_an_empty_cell():
+    engine, board, dispatcher = make_engine([["wR", ".", "."]])
+    events = collect(dispatcher, IllegalActionEvent)
+
+    result = engine.request_jump(Position(0, 1))
+
+    assert result.is_accepted is False
+    assert len(events) == 1
+    assert events[0].piece_id is None
+    assert events[0].destination == Position(0, 1)
+
+
+def test_illegal_action_event_publishes_when_a_jump_targets_an_already_guarded_cell():
+    engine, board, dispatcher = make_engine([["wR", ".", "."]])
+    engine.request_jump(Position(0, 0))
+    events = collect(dispatcher, IllegalActionEvent)
+
+    result = engine.request_jump(Position(0, 0))
+
+    assert result.is_accepted is False
+    assert len(events) == 1
+    assert events[0].piece_id == "wR@0,0"
+
+
+def test_illegal_action_event_does_not_publish_once_the_game_has_already_ended():
+    rows = [["wR", ".", "bK"], [".", ".", "."], ["wN", ".", "."]]
+    engine, board, dispatcher = make_engine(rows)
+    engine.request_move(Position(0, 0), Position(0, 2))
+    engine.wait(MOVE_DURATION * 2)
+    assert engine.game_over is True
+
+    events = collect(dispatcher, IllegalActionEvent)
+    result = engine.request_move(Position(2, 0), Position(2, 1))
+
+    assert result.is_accepted is False
+    assert events == []
 
 
 # -- Ordering / stopping after game over -----------------------------------

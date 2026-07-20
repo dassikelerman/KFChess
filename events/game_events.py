@@ -68,3 +68,12 @@ class PromotionEvent:
 class GameOverEvent:
     winner_color: Optional[PieceColor]
     at_ms: int
+
+
+@dataclass(frozen=True)
+class IllegalActionEvent:
+    # piece_id is None when the request targeted an empty cell - there's
+    # no piece to identify.
+    piece_id: Optional[str]
+    destination: Position
+    at_ms: int

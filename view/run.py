@@ -4,21 +4,33 @@ Run as a module from the project root: python -m view.run
 (A direct `python view/run.py` won't put the project root on sys.path.)
 """
 
+import os
 import time
 
 import cv2
+import pygame
 
 import constants
 from app.game_builder import build_game
+from events.sound_system import SOUND_FILE_BY_EVENT
 from view.piece_animations import AnimationLibrary
 from input.controller_builder import build_controller
 from view.game_ui_snapshot import build_ui_snapshot
 from view.game_view import GameView
 
 
+def _load_sounds():
+    pygame.mixer.init()
+    return {
+        filename: pygame.mixer.Sound(os.path.join(constants.SOUNDS_DIR, filename))
+        for filename in set(SOUND_FILE_BY_EVENT.values())
+    }
+
+
 def run(board_text=None):
     game = build_game(constants.STANDARD_START_BOARD if board_text is None else board_text)
     engine = game.engine
+    sounds = _load_sounds()
 
     # The GUI's own click-to-cell mapping needs to know about the side
     # panels shifting the board right - text/run.py builds its own
@@ -48,6 +60,9 @@ def run(board_text=None):
         last_tick = now
         engine.wait(dt_ms)
         controller.refresh_selection()
+
+        for filename in game.sound_system.drain_pending():
+            sounds[filename].play()
 
         ui_snapshot = build_ui_snapshot(engine, controller, game.score_tracker, game.action_history)
         frame = view.render(ui_snapshot)

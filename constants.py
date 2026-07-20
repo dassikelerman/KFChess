@@ -10,6 +10,7 @@ PAWN_DIRECTION = {"w": -1, "b": 1}
 EMPTY_CELL = "."
 BOARD_IMAGE_PATH = "board.png"
 PIECES_DIR = "pieces2"
+SOUNDS_DIR = "sounds"
 PANEL_WIDTH = 220  # side panels showing each color's score and recent actions
 
 STANDARD_START_BOARD = [

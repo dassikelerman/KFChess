@@ -4,6 +4,7 @@ from engine.snapshot import GameSnapshot, PieceSnapshot
 from events.game_events import (
     CaptureEvent,
     GameOverEvent,
+    IllegalActionEvent,
     JumpCompletedEvent,
     MotionStoppedEvent,
     MoveCompletedEvent,
@@ -89,14 +90,17 @@ class GameEngine:
             return ActionResult(False, ActionResultReason.GAME_OVER)
 
         if self._arbiter.is_jumping_on(source):
+            self._publish_illegal_action(source, destination)
             return ActionResult(False, ActionResultReason.JUMP_IN_PROGRESS)
 
         piece = self._board.piece_at(source)
         if piece is not None and self._arbiter.is_resting(piece.id):
+            self._publish_illegal_action(source, destination)
             return ActionResult(False, ActionResultReason.RESTING)
 
         validation = self._rule_engine.validate_move(self._board, source, destination)
         if not validation.is_valid:
+            self._publish_illegal_action(source, destination)
             return ActionResult(False, validation.reason)
 
         distance = max(abs(destination.row - source.row), abs(destination.col - source.col))
@@ -114,13 +118,16 @@ class GameEngine:
             return ActionResult(False, ActionResultReason.GAME_OVER)
 
         if self.is_busy(position):
+            self._publish_illegal_action(position, position)
             return ActionResult(False, ActionResultReason.JUMP_IN_PROGRESS)
 
         piece = self._board.piece_at(position)
         if piece is None:
+            self._publish_illegal_action(position, position)
             return ActionResult(False, ActionResultReason.EMPTY_SOURCE)
 
         if self._arbiter.is_resting(piece.id):
+            self._publish_illegal_action(position, position)
             return ActionResult(False, ActionResultReason.RESTING)
 
         end_time = self._arbiter.clock + self._jump_duration
@@ -208,6 +215,15 @@ class GameEngine:
                 piece_id=arrival.piece_id, piece_kind=arrival.piece_kind,
                 piece_color=arrival.piece_color, destination=arrival.destination, at_ms=self.clock,
             ))
+
+    def _publish_illegal_action(self, source, destination):
+        if self._dispatcher is None or self._game_over:
+            return
+        piece = self._board.piece_at(source)
+        self._dispatcher.publish(IllegalActionEvent(
+            piece_id=piece.id if piece is not None else None,
+            destination=destination, at_ms=self.clock,
+        ))
 
     def _publish_jump_completed(self, event):
         if self._dispatcher is None or self._game_over:
