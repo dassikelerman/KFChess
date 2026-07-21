@@ -61,7 +61,7 @@ def test_run_game_loop_calls_the_publisher_with_no_arguments():
 def test_game_loop_module_has_no_websocket_specific_dependencies():
     # run_game_loop must stay transport-agnostic - websockets/JSON aren't
     # needed to sleep, measure elapsed time, tick the session, and call an
-    # injected snapshot_publisher callback. Only the module's own imports
+    # injected broadcast_snapshot callback. Only the module's own imports
     # matter here, not its docstring's prose about what it avoids.
     imported_names = {
         name for name, value in vars(game_loop_module).items()

@@ -73,12 +73,12 @@ async def main():
     async def handler(connection):
         await _handle_connection(connection, session, network_publisher, connections)
 
-    def publish_snapshot():
+    def broadcast_snapshot():
         _broadcast(connections, network_publisher.snapshot_payload(session.components))
 
     async with websockets.serve(handler, HOST, PORT):
         logger.info("KFChess server listening on ws://%s:%s", HOST, PORT)
-        await run_game_loop(session, publish_snapshot, TICK_MS)
+        await run_game_loop(session, broadcast_snapshot, TICK_MS)
 
 
 if __name__ == "__main__":
