@@ -1,4 +1,3 @@
-from app.game_builder import build_game
 from events.dispatcher import EventDispatcher
 from events.game_events import (
     CaptureEvent,
@@ -91,17 +90,3 @@ def test_unicast_calls_unicast_fn_with_exactly_that_connection_and_the_serialize
 
     assert unicast_calls == [("conn-a", to_dict(ILLEGAL_ACTION_SAMPLE))]
     assert broadcast == []
-
-
-def test_snapshot_payload_returns_the_engines_snapshot_plus_the_clock():
-    game = build_game(["wK .", ". ."])
-    dispatcher = EventDispatcher()
-    publisher = NetworkPublisher(dispatcher, broadcast_fn=lambda payload: None, unicast_fn=lambda c, p: None)
-
-    payload = publisher.snapshot_payload(game)
-
-    expected = to_dict(game.engine.snapshot())
-    expected["clock_ms"] = game.engine.clock
-    assert payload == expected
-    assert payload["type"] == "GameSnapshot"
-    assert payload["clock_ms"] == game.engine.clock

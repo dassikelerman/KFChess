@@ -15,6 +15,7 @@ import logging
 import websockets
 
 import constants
+from events.serialization import snapshot_to_payload
 from server.game_loop import run_game_loop
 from server.network_publisher import NetworkPublisher
 from server.session import Session
@@ -40,14 +41,14 @@ def _unicast(connection, payload):
     asyncio.create_task(connection.send(json.dumps(payload)))
 
 
-async def _handle_connection(connection, session, network_publisher, connections):
+async def _handle_connection(connection, session, build_current_snapshot_payload, connections):
     connections.add(connection)
     role = session.assign_role(connection)
     logger.info("connection assigned role=%s (now %d connected)", role, len(connections))
 
     try:
         await connection.send(json.dumps({"type": "role", "role": role}))
-        await connection.send(json.dumps(network_publisher.snapshot_payload(session.components)))
+        await connection.send(json.dumps(build_current_snapshot_payload()))
 
         async for message in connection:
             try:
@@ -65,16 +66,23 @@ async def _handle_connection(connection, session, network_publisher, connections
 async def main():
     session = Session(constants.STANDARD_START_BOARD)
     connections = set()
-    network_publisher = NetworkPublisher(
-        session.components.dispatcher, lambda payload: _broadcast(connections, payload), _unicast,
-    )
+
+    def broadcast_payload(payload):
+        _broadcast(connections, payload)
+
+    network_publisher = NetworkPublisher(session.components.dispatcher, broadcast_payload, _unicast)
     session.network_publisher = network_publisher
 
+    def build_current_snapshot_payload():
+        snapshot = session.components.engine.snapshot()
+        clock_ms = session.components.engine.clock
+        return snapshot_to_payload(snapshot, clock_ms)
+
     async def handler(connection):
-        await _handle_connection(connection, session, network_publisher, connections)
+        await _handle_connection(connection, session, build_current_snapshot_payload, connections)
 
     def broadcast_snapshot():
-        _broadcast(connections, network_publisher.snapshot_payload(session.components))
+        _broadcast(connections, build_current_snapshot_payload())
 
     async with websockets.serve(handler, HOST, PORT):
         logger.info("KFChess server listening on ws://%s:%s", HOST, PORT)

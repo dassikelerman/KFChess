@@ -297,3 +297,9 @@ def to_dict(obj):
 def from_dict(data):
     cls, _, kwargs_from = _REGISTRY[data["type"]]
     return cls(**kwargs_from(data))
+
+
+def snapshot_to_payload(snapshot, clock_ms):
+    payload = to_dict(snapshot)
+    payload["clock_ms"] = clock_ms
+    return payload

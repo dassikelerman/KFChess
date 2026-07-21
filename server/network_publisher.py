@@ -43,8 +43,3 @@ class NetworkPublisher:
 
     def unicast(self, connection, event):
         self._unicast_fn(connection, to_dict(event))
-
-    def snapshot_payload(self, components):
-        payload = to_dict(components.engine.snapshot())
-        payload["clock_ms"] = components.engine.clock
-        return payload

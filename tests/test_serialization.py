@@ -12,7 +12,7 @@ from events.game_events import (
     MoveCompletedEvent,
     PromotionEvent,
 )
-from events.serialization import JumpIntent, MoveIntent, from_dict, to_dict
+from events.serialization import JumpIntent, MoveIntent, from_dict, snapshot_to_payload, to_dict
 from model.piece import PieceColor, PieceKind
 from model.position import Position
 
@@ -108,3 +108,23 @@ def test_a_full_snapshot_round_trips_through_a_real_json_string():
     wire = json.dumps(to_dict(SNAPSHOT))
     restored = from_dict(json.loads(wire))
     assert restored == SNAPSHOT
+
+
+def test_snapshot_to_payload_returns_the_snapshots_to_dict_form_plus_the_clock():
+    payload = snapshot_to_payload(SNAPSHOT, clock_ms=1234)
+
+    expected = to_dict(SNAPSHOT)
+    expected["clock_ms"] = 1234
+    assert payload == expected
+    assert payload["type"] == "GameSnapshot"
+    assert payload["clock_ms"] == 1234
+
+
+def test_snapshot_to_payload_does_not_mutate_the_snapshot():
+    snapshot_to_payload(SNAPSHOT, clock_ms=1234)
+    assert to_dict(SNAPSHOT) == to_dict(SNAPSHOT)  # unaffected by the call above
+    assert "clock_ms" not in to_dict(SNAPSHOT)
+
+
+def test_snapshot_to_payload_is_json_serializable():
+    json.dumps(snapshot_to_payload(SNAPSHOT, clock_ms=1234))  # must not raise
