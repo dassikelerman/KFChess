@@ -11,11 +11,11 @@ Run as a module from the project root: python -m server.ws_server
 import asyncio
 import json
 import logging
-import time
 
 import websockets
 
 import constants
+from server.game_loop import run_game_loop
 from server.network_publisher import NetworkPublisher
 from server.session import Session
 
@@ -62,19 +62,6 @@ async def _handle_connection(connection, session, network_publisher, connections
         logger.info("connection closed (role=%s, %d still connected)", role, len(connections))
 
 
-async def _tick_loop(session, network_publisher, connections):
-    interval = TICK_MS / 1000
-    last_tick = time.perf_counter()
-    while True:
-        await asyncio.sleep(interval)
-        now = time.perf_counter()
-        dt_ms = round((now - last_tick) * 1000)
-        last_tick = now
-
-        session.tick(dt_ms)
-        _broadcast(connections, network_publisher.snapshot_payload(session.components))
-
-
 async def main():
     session = Session(constants.STANDARD_START_BOARD)
     connections = set()
@@ -86,9 +73,12 @@ async def main():
     async def handler(connection):
         await _handle_connection(connection, session, network_publisher, connections)
 
+    def publish_snapshot():
+        _broadcast(connections, network_publisher.snapshot_payload(session.components))
+
     async with websockets.serve(handler, HOST, PORT):
         logger.info("KFChess server listening on ws://%s:%s", HOST, PORT)
-        await _tick_loop(session, network_publisher, connections)
+        await run_game_loop(session, publish_snapshot, TICK_MS)
 
 
 if __name__ == "__main__":
