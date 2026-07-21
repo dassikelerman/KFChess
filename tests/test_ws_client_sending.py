@@ -1,10 +1,19 @@
 from client.ws_client import WsClient
-from events.serialization import JumpIntent, MoveIntent, to_dict
+from events.serialization import JumpIntent, Login, MoveIntent, to_dict
 from model.position import Position
 
 
 def make_client():
     return WsClient("ws://unused")
+
+
+def test_send_login_enqueues_a_serialized_login():
+    client = make_client()
+
+    client.send_login("alice")
+
+    payload = client._outbound.get_nowait()
+    assert payload == to_dict(Login(username="alice"))
 
 
 def test_request_move_enqueues_a_serialized_move_intent():

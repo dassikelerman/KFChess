@@ -18,6 +18,7 @@ import json
 
 import websockets
 
+from events.serialization import Login, to_dict
 from server import ws_server
 
 RECV_TIMEOUT_S = 5
@@ -31,12 +32,13 @@ async def _expect(connection, expected_type):
     return data
 
 
-async def _connect_and_check_seat(uri, expected_role):
+async def _connect_and_check_seat(uri, username, expected_role):
     connection = await websockets.connect(uri)
+    await connection.send(json.dumps(to_dict(Login(username=username))))
     role_message = await _expect(connection, "role")
     assert role_message["role"] == expected_role, role_message
     await _expect(connection, "GameSnapshot")  # initial snapshot
-    print(f"OK: connection seated as {expected_role!r} and received its initial snapshot")
+    print(f"OK: {username!r} seated as {expected_role!r} and received its initial snapshot")
     return connection
 
 
@@ -51,8 +53,8 @@ async def main():
         # Connected and fully seated one at a time - the second connect()
         # only happens after the first's role is confirmed, so there's no
         # race over who becomes "white".
-        client_a = await _connect_and_check_seat(uri, "white")
-        client_b = await _connect_and_check_seat(uri, "black")
+        client_a = await _connect_and_check_seat(uri, "alice", "white")
+        client_b = await _connect_and_check_seat(uri, "bob", "black")
 
         for i in range(BROADCASTS_TO_OBSERVE):
             await _expect(client_a, "GameSnapshot")

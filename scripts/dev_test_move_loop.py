@@ -65,6 +65,7 @@ def main():
 
         mover = WsClient(WS_URL)
         mover.start()
+        mover.send_login("mover")
 
         before = _wait_for_snapshot(mover, condition=lambda s: True, timeout=SNAPSHOT_TIMEOUT_S)
         assert _piece_at(before, SOURCE) is not None, f"expected a piece at {SOURCE}"

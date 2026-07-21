@@ -12,7 +12,7 @@ from events.game_events import (
     MoveCompletedEvent,
     PromotionEvent,
 )
-from events.serialization import JumpIntent, MoveIntent, from_dict, snapshot_to_payload, to_dict
+from events.serialization import JumpIntent, Login, MoveIntent, from_dict, snapshot_to_payload, to_dict
 from model.piece import PieceColor, PieceKind
 from model.position import Position
 
@@ -66,6 +66,7 @@ SAMPLES = [
     IllegalActionEvent(piece_id=None, destination=AT, at_ms=700),  # empty-cell attempt
     MoveIntent(source=Position(0, 0), destination=AT),
     JumpIntent(position=AT),
+    Login(username="alice"),
 ]
 
 

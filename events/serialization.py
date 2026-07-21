@@ -34,6 +34,11 @@ class JumpIntent:
     position: Position
 
 
+@dataclass(frozen=True)
+class Login:
+    username: str
+
+
 # -- shared value conversions -------------------------------------------------
 
 def _position_to_dict(position):
@@ -266,6 +271,14 @@ def _jump_intent_kwargs(data):
     return dict(position=_position_from_dict(data["position"]))
 
 
+def _login_fields(login):
+    return {"username": login.username}
+
+
+def _login_kwargs(data):
+    return dict(username=data["username"])
+
+
 # -- registry + public API -------------------------------------------------------
 
 # type_name -> dataclass, plus the field-conversion pair for that type -
@@ -282,6 +295,7 @@ _REGISTRY = {
     "IllegalActionEvent": (IllegalActionEvent, _illegal_action_fields, _illegal_action_kwargs),
     "MoveIntent": (MoveIntent, _move_intent_fields, _move_intent_kwargs),
     "JumpIntent": (JumpIntent, _jump_intent_fields, _jump_intent_kwargs),
+    "Login": (Login, _login_fields, _login_kwargs),
 }
 _TYPE_NAME_BY_CLASS = {cls: name for name, (cls, _, _) in _REGISTRY.items()}
 

@@ -41,6 +41,33 @@ def test_asking_again_for_the_same_connection_returns_its_existing_role():
     assert first == again == "white"
 
 
+# -- login / disconnect -------------------------------------------------------
+
+
+def test_record_login_stores_the_connections_username():
+    session = Session(BOARD)
+
+    session.record_login("conn-a", "alice")
+
+    assert session._usernames["conn-a"] == "alice"
+
+
+def test_disconnect_removes_the_connection_from_both_the_username_and_role_mappings():
+    session = Session(BOARD)
+    session.record_login("conn-a", "alice")
+    session.assign_role("conn-a")
+
+    session.disconnect("conn-a")
+
+    assert "conn-a" not in session._usernames
+    assert "conn-a" not in session._roles
+
+
+def test_disconnect_on_a_connection_that_never_logged_in_does_not_raise():
+    session = Session(BOARD)
+    session.disconnect("conn-never-connected")  # must not raise
+
+
 def test_tick_advances_the_engines_clock():
     session = Session(BOARD)
     before = session.components.engine.clock

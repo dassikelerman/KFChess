@@ -5,6 +5,13 @@ incoming client intents to the engine, and enforces color ownership
 (server/session.py) - a rejection is unicast straight back to whichever
 connection sent it, never broadcast.
 
+Feature 3 (docs/kf-chess-architecture-plan.md): before any of that, a
+connection must log in - exactly one incoming message is awaited, with
+a timeout, and it must be a valid Login (a non-empty username after
+stripping); anything else (timeout, malformed JSON, wrong message
+type, missing/non-string/empty username) closes the connection with a
+reason and never reaches assign_role/session.record_login.
+
 Run as a module from the project root: python -m server.ws_server
 """
 
@@ -23,9 +30,55 @@ from server.session import Session
 HOST = "localhost"
 PORT = 8765
 TICK_MS = constants.FRAME_POLL_MS
+LOGIN_TIMEOUT_S = 5
+_REJECTED_LOGIN_CLOSE_CODE = 1008  # policy violation
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _parse_login_message(raw):
+    """Returns (username, None) for a valid Login, or (None, reason) if
+    the message should be rejected - kept as a plain function (no
+    connection/asyncio involved) so the validation rules are testable
+    on their own."""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None, "expected a JSON Login message"
+
+    if not isinstance(data, dict) or data.get("type") != "Login":
+        return None, "expected a Login message"
+
+    username = data.get("username")
+    if not isinstance(username, str):
+        return None, "username must be a string"
+
+    username = username.strip()
+    if not username:
+        return None, "username must not be empty"
+
+    return username, None
+
+
+async def _await_login(connection):
+    """Waits for exactly one incoming message and validates it as a
+    Login. Returns the stripped username on success; on any failure it
+    closes the connection with a reason and returns None - the caller
+    must not proceed to session.record_login/assign_role."""
+    try:
+        raw = await asyncio.wait_for(connection.recv(), timeout=LOGIN_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        await connection.close(code=_REJECTED_LOGIN_CLOSE_CODE, reason="login timed out")
+        return None
+    except websockets.ConnectionClosed:
+        return None
+
+    username, rejection_reason = _parse_login_message(raw)
+    if rejection_reason is not None:
+        await connection.close(code=_REJECTED_LOGIN_CLOSE_CODE, reason=rejection_reason)
+        return None
+    return username
 
 
 def _broadcast(connections, payload):
@@ -42,11 +95,17 @@ def _unicast(connection, payload):
 
 
 async def _handle_connection(connection, session, build_current_snapshot_payload, connections):
-    connections.add(connection)
-    role = session.assign_role(connection)
-    logger.info("connection assigned role=%s (now %d connected)", role, len(connections))
-
+    role = None
     try:
+        username = await _await_login(connection)
+        if username is None:
+            return  # already rejected and closed by _await_login
+
+        session.record_login(connection, username)
+        connections.add(connection)
+        role = session.assign_role(connection)
+        logger.info("connection logged in as %r, assigned role=%s (now %d connected)", username, role, len(connections))
+
         await connection.send(json.dumps({"type": "role", "role": role}))
         await connection.send(json.dumps(build_current_snapshot_payload()))
 
@@ -60,6 +119,7 @@ async def _handle_connection(connection, session, build_current_snapshot_payload
                 logger.exception("failed to handle message (role=%s): %s", role, message)
     finally:
         connections.discard(connection)
+        session.disconnect(connection)
         logger.info("connection closed (role=%s, %d still connected)", role, len(connections))
 
 

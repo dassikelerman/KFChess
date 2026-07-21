@@ -15,7 +15,7 @@ import threading
 
 import websockets
 
-from events.serialization import JumpIntent, MoveIntent, from_dict, to_dict
+from events.serialization import JumpIntent, Login, MoveIntent, from_dict, to_dict
 
 
 class WsClient:
@@ -28,7 +28,12 @@ class WsClient:
     def start(self):
         self._thread.start()
 
-    # -- ActionSink Protocol (input/controller.py) - main thread, non-blocking --
+    # -- main thread, non-blocking - each just enqueues onto _outbound ------
+
+    def send_login(self, username):
+        self._outbound.put(to_dict(Login(username=username)))
+
+    # -- ActionSink Protocol (input/controller.py) ---------------------------
 
     def request_move(self, source, destination):
         self._outbound.put(to_dict(MoveIntent(source=source, destination=destination)))
@@ -68,7 +73,7 @@ class WsClient:
         elif message_type == "role":
             # Not one of serialization.py's registered dataclasses - the
             # server's own seat-assignment message (server/ws_server.py),
-            # not acted on yet (ownership enforcement is Step 6).
+            # sent once right after a successful login.
             self.inbound.put(("role", data["role"]))
         else:
             event = from_dict(data)
