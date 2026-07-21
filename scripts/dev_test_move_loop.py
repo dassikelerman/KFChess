@@ -1,18 +1,3 @@
-"""Closes the full move loop end-to-end - step 5 of the client/server
-migration (docs/kf-chess-architecture-plan.md). Starts the real server,
-opens a real client/run.py subprocess (for visual confirmation - a
-human should see the same move land on screen), and drives a second,
-purely programmatic WsClient in this process that sends a MoveIntent
-and confirms - by reading the next snapshot broadcasts - that the
-piece actually moved on the server. This script's own PASS/FAIL comes
-entirely from that automated snapshot check, not from anything visual.
-
-Close the client window (or press Escape) once you've confirmed the
-move landed there too; this script then tears everything down.
-
-Run directly: python -m scripts.dev_test_move_loop
-"""
-
 import subprocess
 import sys
 import time
@@ -26,9 +11,6 @@ SNAPSHOT_TIMEOUT_S = 5
 MOVE_LANDING_TIMEOUT_S = 8
 WS_URL = f"ws://{HOST}:{PORT}"
 
-# A single-step opening pawn move (row 6 -> row 5, matching
-# PAWN_DIRECTION["w"] = -1 in constants.py) - a legal move regardless
-# of how far the server has already ticked by the time this connects.
 SOURCE = Position(6, 0)
 DESTINATION = Position(5, 0)
 
@@ -58,14 +40,14 @@ def main():
     server_process = subprocess.Popen([sys.executable, "-m", "server.ws_server"])
     client_process = None
     try:
-        time.sleep(STARTUP_WAIT_S)  # give the server a moment to start listening
+        time.sleep(STARTUP_WAIT_S)
 
         client_process = subprocess.Popen([sys.executable, "-m", "client.run", WS_URL])
         print("A client window should open shortly - watch it for the same move below.")
 
         mover = WsClient(WS_URL)
         mover.start()
-        mover.send_login("mover")
+        mover.send_login("mover", "devpass")
 
         before = _wait_for_snapshot(mover, condition=lambda s: True, timeout=SNAPSHOT_TIMEOUT_S)
         assert _piece_at(before, SOURCE) is not None, f"expected a piece at {SOURCE}"

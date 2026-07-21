@@ -1,9 +1,3 @@
-"""Interactive entry point. Left click selects/moves; right click jumps.
-
-Run as a module from the project root: python -m view.run
-(A direct `python view/run.py` won't put the project root on sys.path.)
-"""
-
 import os
 import time
 import winsound
@@ -31,9 +25,6 @@ def run(board_text=None):
     engine = game.engine
     sound_paths = _sound_paths()
 
-    # The GUI's own click-to-cell mapping needs to know about the side
-    # panels shifting the board right - text/run.py builds its own
-    # controller with zero offsets since it has no panels at all.
     controller = build_controller(
         engine, engine, game.board.width, game.board.height,
         cell_size=constants.CELL_SIZE, x_offset=constants.PANEL_WIDTH,

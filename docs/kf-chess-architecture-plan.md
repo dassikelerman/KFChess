@@ -94,7 +94,7 @@ kf-chess/
 
 ---
 
-## פיצ'ר 3: Username דרך CMD (ללא סיסמה, ללא DB) — **הושלם**
+## פיצ'ר 3: Username דרך CMD (ללא סיסמה, ללא DB)
 
 **מקור:** "Login with username (just for presentation)... Do it in a shell, not via GUI." + אישור מהמשתמשת: "פשוט מתחברים ומשחקים" — ללא אימות אמיתי. "ראשון=White שני=Black" **כבר קיים ועובד** (`assign_role`, מפיצ'ר 2) — אין נגיעה בזה כלל.
 
@@ -106,7 +106,20 @@ kf-chess/
 3. `Session` שומרת מיפוי `connection -> username` (מבנה זהה למיפוי `connection -> role` הקיים), ומדפיסה לוג שרת ("White connected as Dana").
 4. הקליינט מדפיס בטרמינל "מחוברת בתור {username} ({role})" **לפני** שהוא פותח את חלון ה-cv2 — משוב ברור ש"ההתחברות הצליחה" לפני מעבר לגרפיקה.
 5. **לא** מוצג username על גבי המסך/פאנל הניקוד/לוג המהלכים בשלב הזה — נשאר שיפור טבעי לפיצ'ר 4, כשה-username הופך משמעותי (rating).
-6. **תוספת מימוש שלא הייתה בתכנון המקורי:** `server/ws_server.py` ממתין להודעת ה-Login הראשונה עם timeout סופי (`LOGIN_TIMEOUT_S`, כמה שניות) — connection שלא שולח כלום, שולח JSON פגום, טיפוס הודעה שגוי, או username חסר/לא-string/ריק, נדחה ונסגר עם סיבה ברורה (`connection.close(code=1008, reason=...)`), ולעולם לא מגיע ל-`assign_role`/`record_login`. בלי זה, connection "תקוע" בלי login היה יכול להישאר פתוח לנצח.
+
+---
+
+## פיצ'ר 4: Username+Password (SQLite) + Rating (ELO) — **הושלם**
+
+**החלטות שהתקבלו לפני קוד:**
+
+1. **זרימה אחת, לא Login/הרשמה נפרדים** — username+password דרך CMD (כמו פיצ'ר 3, רק עם עוד שדה). אם ה-username לא קיים ב-DB → נוצר חשבון חדש, rating=1200. אם קיים → מאמתים סיסמה.
+2. **סיסמה שגויה → סגירת חיבור**, בלי retry על אותו handshake (עקבי עם איך שטופל login לא-תקין בפיצ'ר 3). הקליינט יכול לפתוח חיבור חדש בעצמו אם המשתמשת רוצה לנסות שוב.
+3. **אחסון סיסמה:** hash+salt דרך `hashlib.pbkdf2_hmac` (stdlib, בלי תלות חדשה). **הבהרה חשובה:** הסיסמה עדיין עוברת ברשת בטקסט גלוי (אין TLS/`wss://` בפרויקט) — ה-hashing מגן רק על מה שנשמר בקובץ ה-DB, לא על מה שעובר ברשת. מגבלה ידועה וסבירה בהיקף הזה.
+4. **סכימה:** טבלה אחת `users` (`username` PK, `password_hash`, `password_salt`, `rating` default 1200). קובץ `server/kf_chess_users.db`, נוצר אוטומטית (`CREATE TABLE IF NOT EXISTS`) בעליית השרת.
+5. **`sqlite3` סינכרוני רגיל (stdlib), לא `aiosqlite`** — בהיקף של כמה שחקנים בו-זמנית שאילתה בודדת לא צפויה לחסום את ה-event loop היחיד בצורה מורגשת. לשקול מחדש רק אם ההיקף יגדל משמעותית.
+6. **Rating מתעדכן רק בסיום משחק אמיתי** (`GameOverEvent` הקיים) — לא במהלך המשחק. נוסחת ELO סטנדרטית, K=32. `Session` (שכבר יודעת `connection -> username` ו-`connection -> role`) ממפה `winner_color` לזוג ה-usernames ומעדכנת את שניהם ב-DB יחד.
+7. **תוספת מימוש:** "הקליינט יכול לפתוח חיבור חדש בעצמו" (החלטה #2 למעלה) מומש בפועל כלולאת retry אוטומטית בתוך `client/run.py` — לא צריך להריץ את התהליך מחדש: סיסמה שגויה מדפיסה "login failed" וחוזרת ישר ל-`getpass` עם `WsClient` חדש לגמרי (הישן לעולם לא נעשה בו שימוש חוזר). כדי שה-thread הרקעי של `WsClient` ידע לדווח על סגירה כזו במקום פשוט "למות" בשקט, `ws_client.py` תופס `websockets.ConnectionClosed` ודוחף פריט `("closed", reason)` לתור ה-inbound.
 
 ---
 
@@ -114,6 +127,6 @@ kf-chess/
 1. ✅ BUS (Pub/Sub)
 2. ✅ Client/Server מקומי + WebSocket
 3. ✅ Username דרך CMD (ללא סיסמה/DB)
-4. Login עם Username+Password (SQLite בצד שרת) + Rating (מתחיל 1200, ELO)
+4. ✅ Username+Password (SQLite) + Rating (ELO, מתחיל 1200)
 5. כפתור PLAY — matchmaking לפי ELO±100, MessageBox אם לא נמצא; ניתוק שחקן → ספירה לאחור 20 שניות → הפסד אוטומטי + עדכון rating
 6. כפתור ROOM — Create/Join/Cancel, מזהה חדר, המצטרף השני=יריב ושאר=צופים; לוגים בצד קליינט ושרת

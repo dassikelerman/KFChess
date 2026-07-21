@@ -19,9 +19,6 @@ def _token(piece):
 
 
 def _captured_token(arrival):
-    # The real captured piece is already gone from the board by the time
-    # an ArrivalEvent is reported, so this is just enough of a fake token
-    # (kind character only) for WinCondition.is_game_over() to read.
     if arrival.captured_piece_id is None:
         return None
     return "?K" if arrival.king_captured else "??"
@@ -49,8 +46,6 @@ class GameEngine:
             raise ValueError("move_duration must be positive")
         if jump_duration <= 0:
             raise ValueError("jump_duration must be positive")
-        # 0 is a legitimate rest duration ("no cooldown"), unlike move/jump
-        # duration where it causes degenerate-Motion edge cases.
         if long_rest_duration < 0:
             raise ValueError("long_rest_duration must not be negative")
         if short_rest_duration < 0:
@@ -83,8 +78,6 @@ class GameEngine:
     def piece_at(self, position):
         return self._board.piece_at(position)
 
-    # -- Moves ----------------------------------------------------------------
-
     def request_move(self, source, destination):
         if self._game_over:
             return ActionResult(False, ActionResultReason.GAME_OVER)
@@ -107,8 +100,6 @@ class GameEngine:
         duration_ms = self._move_duration * distance
         self._arbiter.start_motion(piece, source, destination, duration_ms)
         return ActionResult(True, ActionResultReason.OK)
-
-    # -- Jumps ------------------------------------------------------------------
 
     def is_busy(self, position):
         return self._arbiter.is_jumping_on(position)
@@ -133,8 +124,6 @@ class GameEngine:
         end_time = self._arbiter.clock + self._jump_duration
         self._arbiter.start_jump(position, end_time)
         return ActionResult(True, ActionResultReason.OK)
-
-    # -- Event handling -----------------------------------------------------
 
     def wait(self, ms):
         self._advance(ms)
@@ -165,13 +154,10 @@ class GameEngine:
             self._publish_action_event(arrival)
 
             if arrival.captured_piece_id == arrival.piece_id:
-                continue  # intercepted mid-flight: nothing landed to promote
+                continue
 
             moved = self._board.piece_at(arrival.destination)
             if moved is None or moved.id != arrival.piece_id:
-                # destination was overwritten by a later event in this same
-                # batch before this one was processed - nothing of this
-                # piece is left here to promote or rest.
                 continue
 
             self._arbiter.set_cooldown(moved.id, self._long_rest_duration)
@@ -191,8 +177,6 @@ class GameEngine:
                     from_kind=moved.kind, to_kind=promoted.kind,
                     at=arrival.destination, at_ms=self.clock,
                 ))
-
-    # -- Event publishing (side-channel notifications; never affects game state) --
 
     def _publish_action_event(self, arrival):
         if self._dispatcher is None or self._game_over:
@@ -236,8 +220,6 @@ class GameEngine:
     def _publish(self, event):
         if self._dispatcher is not None:
             self._dispatcher.publish(event)
-
-    # -- Snapshot ---------------------------------------------------------------
 
     def snapshot(self):
         pieces = [self._settled_piece_snapshot(piece) for piece in self._board.pieces()]

@@ -8,7 +8,7 @@ SCORE_BY_KIND = {
     PieceKind.BISHOP: 3,
     PieceKind.ROOK: 5,
     PieceKind.QUEEN: 9,
-    PieceKind.KING: 0,  # a king capture ends the game, not a score race
+    PieceKind.KING: 0,
 }
 
 

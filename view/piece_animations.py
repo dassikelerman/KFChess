@@ -7,9 +7,6 @@ from view.animation_state import AnimationState
 
 
 def token_to_folder(color: PieceColor, kind: PieceKind) -> str:
-    # Not the same as the engine's own board token (lowercase color +
-    # uppercase kind, e.g. "wQ") - pieces2 folders are <KIND><COLOR>,
-    # both uppercase, e.g. "QW".
     return kind.value + color.value.upper()
 
 

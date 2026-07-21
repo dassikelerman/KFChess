@@ -16,14 +16,6 @@ SOUND_FILE_BY_EVENT = {
 
 
 class SoundSystem:
-    """Queues the filename for each event's cue instead of playing audio
-    directly in the callback - dispatcher.publish() runs the callback
-    synchronously on the publisher's own thread, so anything blocking
-    (audio I/O) there would stall it, and a future networked GameEngine
-    may publish from a thread that isn't safe to touch an audio API
-    from. A renderer drains and plays the queue separately, once per
-    frame, from its own loop."""
-
     def __init__(self, dispatcher):
         self._pending = []
         dispatcher.subscribe(MoveCompletedEvent, self._on_move_completed)

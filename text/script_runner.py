@@ -2,10 +2,6 @@ from text.script_parser import ClickCommand, JumpCommand, PrintBoardCommand, Wai
 
 
 class ScriptRunner:
-    """Drives Controller/GameEngine/BoardPrinter through exactly the
-    public API a real UI would use, so a script run here exercises the
-    same surface a click-driven UI does."""
-
     def __init__(self, controller, game_engine, board_printer):
         self._controller = controller
         self._game_engine = game_engine

@@ -1,6 +1,7 @@
 import constants
-from events.game_events import IllegalActionEvent, MoveCompletedEvent
+from events.game_events import GameOverEvent, IllegalActionEvent, MoveCompletedEvent
 from events.serialization import JumpIntent, MoveIntent, to_dict
+from model.piece import PieceColor
 from model.position import Position
 from server.session import Session
 
@@ -13,6 +14,15 @@ class FakeNetworkPublisher:
 
     def unicast(self, connection, event):
         self.unicast_calls.append((connection, event))
+
+
+class FakeUserStore:
+    def __init__(self):
+        self.update_ratings_calls = []
+
+    def update_ratings(self, white_username, black_username, winner_color):
+        self.update_ratings_calls.append((white_username, black_username, winner_color))
+        return (0, 0)  # return value unused by Session
 
 
 def test_first_connection_is_assigned_white():
@@ -232,3 +242,69 @@ def test_a_legitimate_accepted_move_does_not_unicast_anything():
 
     assert network_publisher.unicast_calls == []
     assert len(move_events) == 1
+
+
+# -- Feature 4: rating updates on game over ----------------------------------
+
+
+def test_a_real_game_over_triggers_exactly_one_rating_update_with_correct_args():
+    user_store = FakeUserStore()
+    # White's rook can capture black's king outright in one straight-line
+    # move - a real GameEngine win-condition check, not a hand-built
+    # GameOverEvent, to prove Session is actually wired to the real thing.
+    session = Session(["wR . bK", ". . .", ". . ."], user_store=user_store)
+    session.assign_role("conn-white")  # white
+    session.assign_role("conn-black")  # black
+    session.record_login("conn-white", "alice")
+    session.record_login("conn-black", "bob")
+    session.network_publisher = FakeNetworkPublisher()
+
+    session.handle_client_message(
+        "conn-white", to_dict(MoveIntent(source=Position(0, 0), destination=Position(0, 2))),
+    )
+    session.tick(constants.MOVE_DURATION * 2 + 1)  # distance 2 - duration scales with distance
+
+    assert user_store.update_ratings_calls == [("alice", "bob", "white")]
+
+
+def test_a_missing_username_for_a_seat_skips_the_rating_update_without_crashing():
+    user_store = FakeUserStore()
+    session = Session(["wR . bK", ". . .", ". . ."], user_store=user_store)
+    session.assign_role("conn-white")  # white
+    session.assign_role("conn-black")  # black
+    session.record_login("conn-white", "alice")
+    # conn-black never logs in - no username recorded for the black seat.
+    session.network_publisher = FakeNetworkPublisher()
+
+    session.handle_client_message(
+        "conn-white", to_dict(MoveIntent(source=Position(0, 0), destination=Position(0, 2))),
+    )
+    session.tick(constants.MOVE_DURATION * 2 + 1)  # must not raise
+
+    assert user_store.update_ratings_calls == []
+
+
+def test_game_over_event_firing_twice_only_updates_ratings_once():
+    user_store = FakeUserStore()
+    session = Session(BOARD, user_store=user_store)
+    session.assign_role("conn-white")  # white
+    session.assign_role("conn-black")  # black
+    session.record_login("conn-white", "alice")
+    session.record_login("conn-black", "bob")
+
+    event = GameOverEvent(winner_color=PieceColor.WHITE, at_ms=100)
+    session.components.dispatcher.publish(event)
+    session.components.dispatcher.publish(event)  # must not double-count
+
+    assert user_store.update_ratings_calls == [("alice", "bob", "white")]
+
+
+def test_a_session_built_without_a_user_store_does_not_subscribe_to_game_over():
+    session = Session(BOARD)  # user_store defaults to None
+    session.assign_role("conn-white")
+    session.assign_role("conn-black")
+    session.record_login("conn-white", "alice")
+    session.record_login("conn-black", "bob")
+
+    # Must not raise even though there's no user_store to call into.
+    session.components.dispatcher.publish(GameOverEvent(winner_color=PieceColor.WHITE, at_ms=100))

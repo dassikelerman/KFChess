@@ -2,9 +2,6 @@ from abc import ABC, abstractmethod
 
 
 class WinCondition(ABC):
-    """Strategy pattern: swappable so a variant can define a different
-    win condition without touching GameEngine."""
-
     @abstractmethod
     def is_game_over(self, captured_piece):
         pass
@@ -16,9 +13,6 @@ class KingCaptureWinCondition(WinCondition):
 
 
 class PromotionRule(ABC):
-    """Strategy pattern: swappable so a variant can define different
-    promotion rules without touching GameEngine."""
-
     @abstractmethod
     def promote(self, piece, row, board_height):
         pass

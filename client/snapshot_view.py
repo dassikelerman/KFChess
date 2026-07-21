@@ -1,16 +1,3 @@
-"""Step 4 of the client/server migration (docs/kf-chess-architecture-plan.md):
-a purely local read-model over the most recent GameSnapshot the server
-sent. Satisfies the GameStateReader Protocol (input/controller.py) via
-plain lookups over GameSnapshot.pieces - id, row, col, is_jumping,
-rest_fraction_remaining are the only data this reads, no other source.
-
-The client is never authoritative: any read done here can be stale by
-the time it reaches the server (a piece may already have moved on),
-and that's fine - the server rejects requests against its own state,
-not the client's guess. Also exposes snapshot()/clock, matching what
-view/game_ui_snapshot.py's build_ui_snapshot expects from "engine"."""
-
-
 class SnapshotView:
     def __init__(self):
         self._snapshot = None

@@ -6,8 +6,6 @@ from rules.piece_rules import MoveContext
 
 @dataclass(frozen=True)
 class MoveValidation:
-    # Internal legality-check result - kept separate from ActionResult,
-    # the external result of a whole request_move()/request_jump() call.
     is_valid: bool
     reason: ActionResultReason
 
@@ -50,10 +48,6 @@ class IncompletePieceRuleRegistryError(Exception):
 
 
 class PieceRuleRegistry:
-    """Maps a PieceKind to its MovementStrategy - the extension point for
-    movement rules (Strategy pattern): registering a kind with its own
-    strategy is all a new piece kind needs, no engine/parser changes."""
-
     def __init__(self):
         self._strategies = {}
 

@@ -1,15 +1,3 @@
-"""Layers the one-shot rest states (LONG_REST/SHORT_REST) on top of the
-IDLE/MOVE/JUMP derived from GameEngine's logical PieceSnapshot fields.
-Driven by AnimationLibrary's own next_state_when_finished, so the
-transition table isn't hardcoded here - see docs for the full chain.
-
-Also the single source of truth for how long a piece has been in its
-current AnimationState - a renderer needs that elapsed time to pick the
-right frame (see view.piece_animations.frame_index_for), and tracking
-it here rather than in a second, parallel timer keeps the "when did
-this piece's state last change" bookkeeping in one place.
-"""
-
 from dataclasses import dataclass
 
 from view.animation_state import AnimationState, derive_animation_state
@@ -26,7 +14,7 @@ class AnimationProgress:
 class PieceStateMachine:
     def __init__(self, animation_library):
         self._library = animation_library
-        self._entries = {}  # piece_id -> (AnimationState, entered_at_ms)
+        self._entries = {}
 
     def state_for(self, piece_snapshot, clock_ms):
         engine_state = derive_animation_state(piece_snapshot)
@@ -43,8 +31,6 @@ class PieceStateMachine:
             return AnimationProgress(AnimationState.IDLE, clock_ms - entered_at)
 
         if state in (AnimationState.MOVE, AnimationState.JUMP):
-            # Engine just reported idle right after move/jump - hand off
-            # to whatever that clip's own config says comes next.
             next_state = self._next_state(piece_snapshot, state)
             return self._enter(piece_snapshot.id, next_state, clock_ms)
 

@@ -8,11 +8,6 @@ from model.piece import PieceColor
 
 @dataclass(frozen=True)
 class GameUiSnapshot:
-    """Everything GameView needs to draw one frame, aggregated in a
-    single object so render() takes one argument instead of a growing
-    parameter list. Purely a read-only view-layer aggregate - none of
-    this lives in GameEngine or GameSnapshot."""
-
     game: GameSnapshot
     clock_ms: int
     selected: Optional[Tuple[int, int]]
@@ -21,9 +16,6 @@ class GameUiSnapshot:
 
 
 def build_ui_snapshot(state_source, controller, score_tracker, action_history, recent_action_count=None):
-    """state_source only needs snapshot() and .clock - GameEngine (local
-    flows) and client/snapshot_view.py::SnapshotView (network flow) both
-    provide that, nothing more, so either can be passed here."""
     recent_actions = (
         action_history.recent() if recent_action_count is None
         else action_history.recent(recent_action_count)

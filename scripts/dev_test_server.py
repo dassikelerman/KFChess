@@ -1,18 +1,3 @@
-"""Manual/integration check for server/ws_server.py - deliberately NOT
-part of the pytest suite (it opens real sockets and would be slow/
-flaky in CI). Starts the real server in-process, connects two raw
-websocket clients one at a time (so role assignment order is
-deterministic - the second client only connects once the first is
-fully seated), and checks:
-
-  - the first connection is assigned "white", the second "black"
-  - both receive an initial full snapshot right after their role
-  - both keep receiving fresh snapshot broadcasts on the server's own
-    tick loop, with no move/jump sent from either side
-
-Run directly: python -m scripts.dev_test_server
-"""
-
 import asyncio
 import json
 
@@ -34,25 +19,22 @@ async def _expect(connection, expected_type):
 
 async def _connect_and_check_seat(uri, username, expected_role):
     connection = await websockets.connect(uri)
-    await connection.send(json.dumps(to_dict(Login(username=username))))
+    await connection.send(json.dumps(to_dict(Login(username=username, password="devpass"))))
     role_message = await _expect(connection, "role")
     assert role_message["role"] == expected_role, role_message
-    await _expect(connection, "GameSnapshot")  # initial snapshot
+    await _expect(connection, "GameSnapshot")
     print(f"OK: {username!r} seated as {expected_role!r} and received its initial snapshot")
     return connection
 
 
 async def main():
     server_task = asyncio.create_task(ws_server.main())
-    await asyncio.sleep(0.5)  # give the server a moment to start listening
+    await asyncio.sleep(0.5)
 
     uri = f"ws://{ws_server.HOST}:{ws_server.PORT}"
     client_a = None
     client_b = None
     try:
-        # Connected and fully seated one at a time - the second connect()
-        # only happens after the first's role is confirmed, so there's no
-        # race over who becomes "white".
         client_a = await _connect_and_check_seat(uri, "alice", "white")
         client_b = await _connect_and_check_seat(uri, "bob", "black")
 

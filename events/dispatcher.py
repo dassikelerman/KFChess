@@ -2,11 +2,6 @@ from collections import defaultdict
 
 
 class EventDispatcher:
-    """Minimal pub/sub: publishers don't know who (if anyone) is
-    listening, and listeners don't know who published - the seam future
-    consumers (NetworkPublisher, ReplayRecorder, SoundSystem) attach to
-    without GameEngine ever changing."""
-
     def __init__(self):
         self._subscribers = defaultdict(list)
 

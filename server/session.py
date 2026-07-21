@@ -1,47 +1,34 @@
-"""Step 6 of the client/server migration (docs/kf-chess-architecture-plan.md):
-a single game/room, wrapping GameComponents, enforcing color ownership
-on every client intent. network_publisher is wired in by the caller
-after construction (see server/ws_server.py::main - it in turn needs
-this Session's own dispatcher to build) - handle_client_message uses
-it to unicast a rejection straight back to whichever connection sent
-it, whether the rejection came from the ownership check here or from
-GameEngine's own ActionResult; never broadcast.
-
-Feature 3 (docs/kf-chess-architecture-plan.md): a plain, unauthenticated
-username collected before role assignment - record_login/disconnect
-manage the connection -> username mapping the same way assign_role
-already manages connection -> role; ws_server.py owns the actual
-handshake sequencing (login must succeed before a role is assigned)."""
-
 import logging
 
 from app.game_builder import build_game
-from events.game_events import IllegalActionEvent
+from events.game_events import GameOverEvent, IllegalActionEvent
 from events.serialization import JumpIntent, MoveIntent, from_dict
 from model.piece import PieceColor
 
 _ROLES_BY_INDEX = ("white", "black")
 SPECTATOR_ROLE = "spectator"
 _COLOR_BY_ROLE = {"white": PieceColor.WHITE, "black": PieceColor.BLACK}
+_ROLE_BY_COLOR = {PieceColor.WHITE: "white", PieceColor.BLACK: "black"}
 
 logger = logging.getLogger(__name__)
 
 
 class Session:
-    def __init__(self, board_text):
+    def __init__(self, board_text, user_store=None):
         self.components = build_game(board_text)
-        self.network_publisher = None  # wired in by the caller - see server/ws_server.py
-        self._roles = {}  # connection -> role, in assignment order
-        self._usernames = {}  # connection -> username, in login order
+        self.network_publisher = None
+        self._roles = {}
+        self._usernames = {}
+        self._user_store = user_store
+        self._ratings_updated = False
+        if user_store is not None:
+            self.components.dispatcher.subscribe(GameOverEvent, self._on_game_over)
 
     def record_login(self, connection, username):
         self._usernames[connection] = username
         logger.info("connection logged in as %r", username)
 
     def disconnect(self, connection):
-        """Single cleanup point for a closed connection - removes it from
-        every mapping Session keeps (username, role), so ws_server.py has
-        one call to make instead of tearing down each mapping itself."""
         self._usernames.pop(connection, None)
         self._roles.pop(connection, None)
 
@@ -99,3 +86,26 @@ class Session:
             destination=destination, at_ms=self.components.engine.clock,
         )
         self.network_publisher.unicast(connection, event)
+
+    def _on_game_over(self, event):
+        if self._ratings_updated:
+            return
+        self._ratings_updated = True
+
+        white_username = self._usernames.get(self._connection_for_role("white"))
+        black_username = self._usernames.get(self._connection_for_role("black"))
+        if white_username is None or black_username is None:
+            logger.warning(
+                "game over but missing a username for a seat (white=%r, black=%r) - skipping rating update",
+                white_username, black_username,
+            )
+            return
+
+        winner_color = _ROLE_BY_COLOR.get(event.winner_color)
+        self._user_store.update_ratings(white_username, black_username, winner_color)
+
+    def _connection_for_role(self, role):
+        for connection, assigned_role in self._roles.items():
+            if assigned_role == role:
+                return connection
+        return None

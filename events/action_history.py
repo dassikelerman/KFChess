@@ -22,17 +22,11 @@ def _token(color, kind):
 @dataclass(frozen=True)
 class ActionEntry:
     text: str
-    # Which side's panel this belongs to; None means "show on both" -
-    # only GameOverEvent (not tied to a single mover) uses that.
     color: Optional[PieceColor]
     at_ms: int
 
 
 class ActionHistory:
-    """Only real, already-verified occurrences are recorded here - never
-    rejected/illegal move or jump attempts (those never reach GameEngine
-    as an event in the first place)."""
-
     def __init__(self, dispatcher):
         self._entries = []
         dispatcher.subscribe(MoveCompletedEvent, self._on_move_completed)

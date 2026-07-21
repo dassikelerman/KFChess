@@ -1,9 +1,3 @@
-"""The server's tick loop, extracted out of server/ws_server.py so it has
-no knowledge of WebSockets, JSON, or connections - just Session.tick()
-and a broadcast_snapshot callback injected by the caller, the same
-"no knowledge of transport" separation server/network_publisher.py
-already has via its own injected broadcast_fn/unicast_fn."""
-
 import asyncio
 import time
 

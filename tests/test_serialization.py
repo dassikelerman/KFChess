@@ -66,7 +66,7 @@ SAMPLES = [
     IllegalActionEvent(piece_id=None, destination=AT, at_ms=700),  # empty-cell attempt
     MoveIntent(source=Position(0, 0), destination=AT),
     JumpIntent(position=AT),
-    Login(username="alice"),
+    Login(username="alice", password="hunter2"),
 ]
 
 

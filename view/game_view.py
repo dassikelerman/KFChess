@@ -5,10 +5,6 @@ from view.piece_animations import frame_index_for
 from view.img import Img
 from view.piece_state_machine import PieceStateMachine
 
-# Height is normalized against each rest's own duration (see
-# RealTimeArbiter.rest_remaining_fraction), so the curtain covering the
-# piece shrinks from the top down at a pace matching that rest's own
-# length, with no separate speed setting needed.
 REST_OVERLAY_COLOR_BGR = (230, 160, 90)
 REST_OVERLAY_ALPHA = 0.55
 
@@ -16,9 +12,6 @@ SELECTION_FRAME_COLOR_BGR = (60, 220, 255)
 SELECTION_FRAME_THICKNESS = 4
 SELECTION_FRAME_ALPHA = 0.85
 
-# Black panel on the left shows PieceColor.BLACK's score/history, white
-# panel on the right shows PieceColor.WHITE's - fixed sides, not
-# configurable, per the requested layout.
 PANEL_BACKGROUND_BGR = {PieceColor.BLACK: (30, 30, 30), PieceColor.WHITE: (235, 235, 235)}
 PANEL_TEXT_BGR = {PieceColor.BLACK: (255, 255, 255), PieceColor.WHITE: (20, 20, 20)}
 PANEL_TEXT_MARGIN = 14
@@ -50,14 +43,8 @@ class GameView:
         self._draw_board(canvas)
         for piece in ui_snapshot.game.pieces:
             self._draw_piece(canvas, piece, ui_snapshot.clock_ms)
-        # Own pass after every piece, so the tint sits on top of the
-        # sprite instead of being hidden underneath it.
         for piece in ui_snapshot.game.pieces:
             self._draw_rest_overlay(canvas, piece)
-        # Drawn last so the selection frame is never hidden under a
-        # piece or its rest overlay. `selected` is owned by Controller
-        # and handed to GameView purely for drawing - it is not part of
-        # GameSnapshot or GameEngine state.
         self._draw_selection_frame(canvas, ui_snapshot.selected)
         if self._panel_width > 0:
             self._draw_panel(canvas, PieceColor.BLACK, ui_snapshot)
@@ -70,8 +57,6 @@ class GameView:
         for piece_id in self._known_piece_ids - current_ids:
             self._state_machine.forget(piece_id)
         self._known_piece_ids = current_ids
-
-    # -- Canvas / board ---------------------------------------------------
 
     def _blank_canvas(self):
         channels = self._board_image.img.shape[2]
@@ -91,16 +76,11 @@ class GameView:
         x0 = self._board_x_offset
         canvas.img[:, x0:x0 + self._board_pixel_width] = self._board_image.img
 
-    # -- Side panels --------------------------------------------------------
-
     def _draw_panel(self, canvas, color, ui_snapshot):
         x0 = 0 if color == PieceColor.BLACK else self._board_x_offset + self._board_pixel_width
         text_color = PANEL_TEXT_BGR[color]
         score = ui_snapshot.score.get(color, 0)
 
-        # Drawn onto an isolated, exactly-panel-width buffer first - a
-        # long action string can never bleed into the board region this
-        # way, since OpenCV clips drawing to the array it's given.
         panel = Img()
         panel.img = canvas.img[:, x0:x0 + self._panel_width].copy()
 
@@ -115,8 +95,6 @@ class GameView:
             panel.put_text(action.text, PANEL_TEXT_MARGIN, y, PANEL_ACTION_FONT_SIZE, text_color)
 
         canvas.img[:, x0:x0 + self._panel_width] = panel.img
-
-    # -- Pieces / overlays --------------------------------------------------
 
     def _draw_rest_overlay(self, canvas, piece):
         if piece.rest_fraction_remaining is None:
@@ -144,10 +122,10 @@ class GameView:
         size = self._cell_size
         t = SELECTION_FRAME_THICKNESS
 
-        self._blend(canvas.img[y:y + t, x:x + size, :3], color, SELECTION_FRAME_ALPHA)  # top
-        self._blend(canvas.img[y + size - t:y + size, x:x + size, :3], color, SELECTION_FRAME_ALPHA)  # bottom
-        self._blend(canvas.img[y:y + size, x:x + t, :3], color, SELECTION_FRAME_ALPHA)  # left
-        self._blend(canvas.img[y:y + size, x + size - t:x + size, :3], color, SELECTION_FRAME_ALPHA)  # right
+        self._blend(canvas.img[y:y + t, x:x + size, :3], color, SELECTION_FRAME_ALPHA)
+        self._blend(canvas.img[y + size - t:y + size, x:x + size, :3], color, SELECTION_FRAME_ALPHA)
+        self._blend(canvas.img[y:y + size, x:x + t, :3], color, SELECTION_FRAME_ALPHA)
+        self._blend(canvas.img[y:y + size, x + size - t:x + size, :3], color, SELECTION_FRAME_ALPHA)
 
     def _blend(self, roi, color, alpha):
         roi[:] = (roi * (1 - alpha) + color * alpha).astype(roi.dtype)

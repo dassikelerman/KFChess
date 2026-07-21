@@ -45,9 +45,6 @@ class Motion:
                 Position(self.source.row + step_r * i, self.source.col + step_c * i)
                 for i in range(1, distance + 1)
             ]
-        # A knight's L-shape isn't a line it travels along and already
-        # ignores blockers for legality, so it has no in-transit cells
-        # to collide on - only the destination itself counts.
         return [self.destination]
 
     def time_at_cell(self, cell: Position) -> float:

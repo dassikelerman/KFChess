@@ -53,15 +53,8 @@ class Controller:
         self._action_sink.request_jump(pos)
 
     def refresh_selection(self):
-        """Drops a selection that's gone stale (its piece was captured,
-        replaced, or is no longer selectable) without waiting for the
-        next click to notice - meant to be polled once per UI frame so
-        the selection frame never lingers on a piece that isn't there
-        anymore."""
         if self._selected is not None and not self._selection_is_valid():
             self._clear_selection()
-
-    # -- internal helpers -------------------------------------------------
 
     def _select(self, pos):
         if self._is_busy(pos):
@@ -75,10 +68,6 @@ class Controller:
     def _act_on_selection(self, pos):
         start = self._selected
 
-        # The originally selected piece may have been captured (and its
-        # cell taken by a different piece) while waiting for the second
-        # click - Position alone can't tell them apart, so identity is
-        # confirmed the same way RealTimeArbiter._resolve_arrival does.
         if not self._selection_is_valid():
             self._clear_selection()
             return
@@ -92,8 +81,6 @@ class Controller:
             return
 
         self._action_sink.request_move(start, pos)
-        # An illegal target cancels the selection rather than leaving it
-        # open for another attempt - the piece must be selected again.
         self._clear_selection()
 
     def _selection_is_valid(self):

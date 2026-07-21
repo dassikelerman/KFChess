@@ -6,8 +6,6 @@ from model.position import Position
 
 @dataclass(frozen=True)
 class MoveContext:
-    # Bundled as one immutable object (instead of five loose parameters)
-    # so new piece kinds can be registered without changing every call site.
     board: object  # model.board.Board
     color: str
     start: Position
@@ -16,10 +14,6 @@ class MoveContext:
 
 
 class MovementStrategy(ABC):
-    """A single piece kind's movement rule (Strategy pattern) - new kinds
-    are supported by implementing this and registering with
-    PieceRuleRegistry, no engine/parser code changes needed."""
-
     @abstractmethod
     def is_legal(self, dr: int, dc: int, context: MoveContext) -> bool:
         ...
@@ -85,9 +79,6 @@ class PawnMovement(MovementStrategy):
         self._directions = directions
 
     def is_legal(self, dr, dc, context):
-        # A color's start row is derived from board height rather than a
-        # fixed number (boards vary in size): one row in front of its
-        # back rank in its direction of travel.
         direction = self._directions[context.color]
         back_rank = context.board.height - 1 if direction < 0 else 0
         start_row = back_rank + direction

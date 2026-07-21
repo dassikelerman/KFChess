@@ -1,17 +1,4 @@
-"""Client entry point, step 5 of the client/server migration
-(docs/kf-chess-architecture-plan.md): connects, receives state, renders
-it, and now sends real moves/jumps through the same Controller
-view/run.py uses - WsClient satisfies ActionSink, SnapshotView
-satisfies GameStateReader (both Protocols in input/controller.py).
-
-Feature 3 (docs/kf-chess-architecture-plan.md): a plain, unauthenticated
-username is collected from the terminal and sent as the very first
-message, before the server will assign a role at all (server/session.py,
-server/ws_server.py).
-
-Run as a module from the project root: python -m client.run <ws_url>
-"""
-
+import getpass
 import os
 import queue
 import sys
@@ -46,6 +33,25 @@ def _prompt_for_username():
     return username
 
 
+def _connect_and_login(ws_url, username, password):
+    ws_client = WsClient(ws_url)
+    ws_client.start()
+    ws_client.send_login(username, password)
+
+    role = None
+    game_snapshot = None
+    clock_ms = None
+    while game_snapshot is None:
+        item = ws_client.inbound.get()
+        if item[0] == "snapshot":
+            _, game_snapshot, clock_ms = item
+        elif item[0] == "role":
+            _, role = item
+        elif item[0] == "closed":
+            return None
+    return ws_client, role, game_snapshot, clock_ms
+
+
 def run(ws_url):
     username = _prompt_for_username()
 
@@ -57,24 +63,13 @@ def run(ws_url):
 
     snapshot_view = SnapshotView()
 
-    ws_client = WsClient(ws_url)
-    ws_client.start()
-    ws_client.send_login(username)
-
-    # GameView needs board dimensions up front, same as GameEngine's own
-    # board does locally in view/run.py - here that only exists once the
-    # server's first snapshot arrives, so block for it before building
-    # the window at all. The server sends a "role" message first
-    # (server/ws_server.py, right after a successful login) - captured
-    # here too so it can be printed below.
-    role = None
-    game_snapshot = None
-    while game_snapshot is None:
-        item = ws_client.inbound.get()
-        if item[0] == "snapshot":
-            _, game_snapshot, clock_ms = item
-        elif item[0] == "role":
-            _, role = item
+    login_result = None
+    while login_result is None:
+        password = getpass.getpass("Password: ")
+        login_result = _connect_and_login(ws_url, username, password)
+        if login_result is None:
+            print("login failed")
+    ws_client, role, game_snapshot, clock_ms = login_result
     snapshot_view.update(game_snapshot, clock_ms)
 
     print(f"Connected as {username} ({role})")
@@ -88,10 +83,6 @@ def run(ws_url):
         panel_width=constants.PANEL_WIDTH,
     )
 
-    # Same click-to-cell mapping view/run.py builds locally - the client
-    # reads state through snapshot_view instead of a real GameEngine, and
-    # sends actions through ws_client instead of calling the engine
-    # directly, but Controller itself doesn't know the difference.
     controller = build_controller(
         ws_client, snapshot_view, game_snapshot.board_width, game_snapshot.board_height,
         cell_size=constants.CELL_SIZE, x_offset=constants.PANEL_WIDTH,
@@ -137,8 +128,6 @@ def _drain_inbound(ws_client, snapshot_view, dispatcher):
         elif kind == "event":
             _, event = item
             dispatcher.publish(event)
-        # A "role" item never arrives here - it's sent once, up front, and
-        # already consumed by the initial wait loop above.
 
 
 def _on_mouse(controller, event, x, y):

@@ -1,12 +1,3 @@
-"""Pure data <-> plain-dict conversion, step 1 of the client/server
-migration (see docs/kf-chess-architecture-plan.md for the full plan -
-this module is only that first step). No networking, no new
-architecture: to_dict()/from_dict() turn GameSnapshot, the outward
-game events (events/game_events.py), and the two client->server
-intents below into plain dicts that json.dumps() can handle directly,
-and back into real dataclasses again.
-"""
-
 from dataclasses import dataclass
 
 from engine.snapshot import GameSnapshot, PieceSnapshot
@@ -37,9 +28,8 @@ class JumpIntent:
 @dataclass(frozen=True)
 class Login:
     username: str
+    password: str
 
-
-# -- shared value conversions -------------------------------------------------
 
 def _position_to_dict(position):
     return {"row": position.row, "col": position.col}
@@ -56,8 +46,6 @@ def _color_to_value(color):
 def _color_from_value(value):
     return None if value is None else PieceColor(value)
 
-
-# -- GameSnapshot / PieceSnapshot ---------------------------------------------
 
 def _piece_snapshot_to_dict(piece):
     return {
@@ -106,8 +94,6 @@ def _game_snapshot_kwargs(data):
         game_over=data["game_over"],
     )
 
-
-# -- events ---------------------------------------------------------------------
 
 def _move_completed_fields(event):
     return {
@@ -247,8 +233,6 @@ def _illegal_action_kwargs(data):
     )
 
 
-# -- client -> server intents ----------------------------------------------------
-
 def _move_intent_fields(intent):
     return {
         "source": _position_to_dict(intent.source),
@@ -272,18 +256,13 @@ def _jump_intent_kwargs(data):
 
 
 def _login_fields(login):
-    return {"username": login.username}
+    return {"username": login.username, "password": login.password}
 
 
 def _login_kwargs(data):
-    return dict(username=data["username"])
+    return dict(username=data["username"], password=data["password"])
 
 
-# -- registry + public API -------------------------------------------------------
-
-# type_name -> dataclass, plus the field-conversion pair for that type -
-# to_dict()/from_dict() dispatch off this instead of an if/elif chain, so
-# adding a future intent/event is a one-line registration, not a new branch.
 _REGISTRY = {
     "GameSnapshot": (GameSnapshot, _game_snapshot_fields, _game_snapshot_kwargs),
     "MoveCompletedEvent": (MoveCompletedEvent, _move_completed_fields, _move_completed_kwargs),

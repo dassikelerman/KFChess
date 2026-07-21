@@ -11,13 +11,11 @@ class RealTimeArbiter:
         self._clock = 0
         self._active_motions = []
         self._active_jumps = []
-        self._cooldowns = {}  # piece_id -> (start_time, end_time) of its current rest
+        self._cooldowns = {}
 
     @property
     def clock(self):
         return self._clock
-
-    # -- Cooldown ---------------------------------------------------------------
 
     def is_resting(self, piece_id):
         return self.rest_remaining_fraction(piece_id) is not None
@@ -38,15 +36,11 @@ class RealTimeArbiter:
             return 0.0
         return (end_time - self._clock) / total
 
-    # -- Queries ------------------------------------------------------------
-
     def is_jumping_on(self, cell):
         return any(jump.cell == cell for jump in self._active_jumps)
 
     def active_motions(self):
         return list(self._active_motions)
-
-    # -- Actions ------------------------------------------------------------
 
     def start_motion(self, piece, source, destination, duration_ms):
         start_time = self._clock
@@ -56,8 +50,6 @@ class RealTimeArbiter:
 
     def start_jump(self, cell, end_time):
         self._active_jumps.append(Jump(cell, end_time))
-
-    # -- Event handling -----------------------------------------------------
 
     def advance_time(self, ms):
         if ms < 0:
@@ -75,10 +67,6 @@ class RealTimeArbiter:
                         piece_kind=piece.kind, piece_color=piece.color,
                     ))
 
-        # Every arrival/collision due by new_clock is resolved in strict
-        # chronological order (never insertion order), recomputed fresh
-        # each iteration since resolving one can change what's next -
-        # this makes the outcome independent of the wait() call granularity.
         while True:
             outcome = self._next_event(new_clock)
             if outcome is None:
@@ -114,15 +102,6 @@ class RealTimeArbiter:
                     tie_key = tuple(sorted((motion_a.piece_id, motion_b.piece_id)))
                     candidates.append((time, 0, tie_key, ("collision", motion_a, motion_b, cell)))
 
-        # A motion can reach a cell that isn't its own final destination
-        # (handled separately by _resolve_arrival) but that a *different*
-        # motion has, by now, already landed on and left the Board - e.g.
-        # a rook flying toward a pawn's old cell while that pawn has since
-        # stepped into the rook's path. Only non-destination path cells
-        # are checked here; a stationary piece already sitting there when
-        # the motion was queued would have failed path-clearing validation
-        # up front, so this only ever fires for a cell that became
-        # occupied after the motion was already in flight.
         for motion in self._active_motions:
             for cell in motion.path_cells()[:-1]:
                 board_piece = self._board.piece_at(cell)
@@ -164,9 +143,6 @@ class RealTimeArbiter:
                 motion_a.truncate_before(cell)
                 motion_b.truncate_before(cell)
                 return []
-            # Exact simultaneous meeting between enemies: no well-defined
-            # winner, so neither survives - a documented, deterministic
-            # policy rather than an arbitrary tie-break (see tests).
             self._active_motions.remove(motion_a)
             self._active_motions.remove(motion_b)
             return [self._self_destroyed_event(motion_a, cell), self._self_destroyed_event(motion_b, cell)]
@@ -190,10 +166,6 @@ class RealTimeArbiter:
         )]
 
     def _resolve_encounter(self, motion, cell):
-        # Re-checked fresh here (not passed in from the candidate) since an
-        # earlier event resolved earlier in this same advance_time() call
-        # may have already changed what's on `cell`, or removed `motion`
-        # itself from play.
         if motion not in self._active_motions:
             return []
         board_piece = self._board.piece_at(cell)
@@ -249,12 +221,8 @@ class RealTimeArbiter:
 
         target = self._board.piece_at(motion.destination)
         if target is not None and target.color == piece.color:
-            # Can only happen when a different motion beat this one to
-            # their shared destination with a different arrival time (an
-            # exact tie is already caught in _resolve_collision) - stop
-            # one cell short, same as an in-transit collision.
             if motion.destination == motion.source:
-                return None  # nowhere shorter to go - it never arrives
+                return None
             motion.truncate_before(motion.destination)
             self._active_motions.append(motion)
             return None
@@ -279,8 +247,6 @@ class RealTimeArbiter:
         )
 
     def _is_intercepted(self, motion, piece):
-        # An empty guarded cell must not intercept indiscriminately -
-        # only a jump still actually defended by some piece counts.
         for jump in self._active_jumps:
             if jump.cell != motion.destination:
                 continue

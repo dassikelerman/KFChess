@@ -1,13 +1,3 @@
-"""Step 5 of the client/server migration (docs/kf-chess-architecture-plan.md):
-a background thread with its own asyncio event loop, connecting to the
-server and decoding every inbound message onto a thread-safe queue for
-the main (cv2-owning) thread to drain each frame.
-
-Also satisfies the ActionSink Protocol (input/controller.py):
-request_move()/request_jump() are called from the main/render thread
-and must not block it, so they only enqueue a serialized intent onto a
-second, outbound queue - the background loop drains and sends it."""
-
 import asyncio
 import json
 import queue
@@ -28,12 +18,8 @@ class WsClient:
     def start(self):
         self._thread.start()
 
-    # -- main thread, non-blocking - each just enqueues onto _outbound ------
-
-    def send_login(self, username):
-        self._outbound.put(to_dict(Login(username=username)))
-
-    # -- ActionSink Protocol (input/controller.py) ---------------------------
+    def send_login(self, username, password):
+        self._outbound.put(to_dict(Login(username=username, password=password)))
 
     def request_move(self, source, destination):
         self._outbound.put(to_dict(MoveIntent(source=source, destination=destination)))
@@ -41,14 +27,16 @@ class WsClient:
     def request_jump(self, position):
         self._outbound.put(to_dict(JumpIntent(position=position)))
 
-    # -- background thread ---------------------------------------------------
-
     def _run(self):
         asyncio.run(self._connect_and_pump())
 
     async def _connect_and_pump(self):
-        async with websockets.connect(self._url) as connection:
-            await asyncio.gather(self._receive(connection), self._send(connection))
+        try:
+            async with websockets.connect(self._url) as connection:
+                await asyncio.gather(self._receive(connection), self._send(connection))
+        except websockets.ConnectionClosed as e:
+            reason = e.rcvd.reason if e.rcvd is not None else ""
+            self.inbound.put(("closed", reason))
 
     async def _receive(self, connection):
         async for raw in connection:
@@ -57,9 +45,6 @@ class WsClient:
     async def _send(self, connection):
         loop = asyncio.get_event_loop()
         while True:
-            # self._outbound is a plain (blocking) queue.Queue, shared
-            # with the main thread - run_in_executor keeps that block off
-            # this asyncio loop so _receive keeps running concurrently.
             payload = await loop.run_in_executor(None, self._outbound.get)
             await connection.send(json.dumps(payload))
 
@@ -71,9 +56,6 @@ class WsClient:
             game_snapshot = from_dict(data)
             self.inbound.put(("snapshot", game_snapshot, clock_ms))
         elif message_type == "role":
-            # Not one of serialization.py's registered dataclasses - the
-            # server's own seat-assignment message (server/ws_server.py),
-            # sent once right after a successful login.
             self.inbound.put(("role", data["role"]))
         else:
             event = from_dict(data)

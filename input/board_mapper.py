@@ -2,9 +2,6 @@ from model.position import Position
 
 
 class BoardMapper:
-    """The one piece of the click-handling pipeline that knows pixels
-    exist at all - converts them into board cells."""
-
     def __init__(self, cell_size, board_width, board_height, x_offset=0, y_offset=0):
         self._cell_size = cell_size
         self._board_width = board_width
