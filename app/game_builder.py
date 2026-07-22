@@ -4,10 +4,7 @@ import constants
 from board_io.board_parser import build_board
 from engine.game_conditions import KingCaptureWinCondition, LastRankPromotion
 from engine.game_engine import GameEngine
-from events.action_history import ActionHistory
 from events.dispatcher import EventDispatcher
-from events.score_tracker import ScoreTracker
-from events.sound_system import SoundSystem
 from realtime.real_time_arbiter import RealTimeArbiter
 from rules.rule_engine import RuleEngine, build_default_registry
 
@@ -17,9 +14,6 @@ class GameComponents:
     engine: GameEngine
     board: object  # model.board.Board
     dispatcher: EventDispatcher
-    score_tracker: ScoreTracker
-    action_history: ActionHistory
-    sound_system: SoundSystem
 
 
 def build_game(board_text):
@@ -27,9 +21,6 @@ def build_game(board_text):
     board = build_board(board_text, colors=constants.COLORS, empty_cell=constants.EMPTY_CELL)
 
     dispatcher = EventDispatcher()
-    score_tracker = ScoreTracker(dispatcher)
-    action_history = ActionHistory(dispatcher)
-    sound_system = SoundSystem(dispatcher)
 
     engine = GameEngine(
         board=board,
@@ -43,8 +34,4 @@ def build_game(board_text):
         short_rest_duration=constants.SHORT_REST_DURATION,
         dispatcher=dispatcher,
     )
-    return GameComponents(
-        engine=engine, board=board,
-        dispatcher=dispatcher, score_tracker=score_tracker, action_history=action_history,
-        sound_system=sound_system,
-    )
+    return GameComponents(engine=engine, board=board, dispatcher=dispatcher)

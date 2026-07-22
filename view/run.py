@@ -6,7 +6,9 @@ import cv2
 
 import constants
 from app.game_builder import build_game
-from events.sound_system import SOUND_FILE_BY_EVENT
+from events.action_history import ActionHistory
+from events.score_tracker import ScoreTracker
+from events.sound_system import SOUND_FILE_BY_EVENT, SoundSystem
 from view.piece_animations import AnimationLibrary
 from input.controller_builder import build_controller
 from view.game_ui_snapshot import build_ui_snapshot
@@ -23,6 +25,9 @@ def _sound_paths():
 def run(board_text=None):
     game = build_game(constants.STANDARD_START_BOARD if board_text is None else board_text)
     engine = game.engine
+    score_tracker = ScoreTracker(game.dispatcher)
+    action_history = ActionHistory(game.dispatcher)
+    sound_system = SoundSystem(game.dispatcher)
     sound_paths = _sound_paths()
 
     controller = build_controller(
@@ -52,10 +57,10 @@ def run(board_text=None):
         engine.wait(dt_ms)
         controller.refresh_selection()
 
-        for filename in game.sound_system.drain_pending():
+        for filename in sound_system.drain_pending():
             winsound.PlaySound(sound_paths[filename], winsound.SND_FILENAME | winsound.SND_ASYNC)
 
-        ui_snapshot = build_ui_snapshot(engine, controller, game.score_tracker, game.action_history)
+        ui_snapshot = build_ui_snapshot(engine, controller, score_tracker, action_history)
         frame = view.render(ui_snapshot)
         frame.show(constants.WINDOW_NAME)
 
