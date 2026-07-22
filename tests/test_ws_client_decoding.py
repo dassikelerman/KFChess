@@ -3,7 +3,7 @@ import json
 from client.ws_client import WsClient
 from engine.snapshot import GameSnapshot, PieceSnapshot
 from events.game_events import CaptureEvent, MoveCompletedEvent
-from events.serialization import to_dict
+from protocol.serialization import to_dict
 from model.piece import PieceColor, PieceKind
 from model.position import Position
 

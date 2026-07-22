@@ -4,7 +4,7 @@ import websockets
 from websockets.frames import Close
 
 from client.ws_client import WsClient
-from events.serialization import JumpIntent, Login, MoveIntent, to_dict
+from protocol.serialization import JumpIntent, Login, MoveIntent, to_dict
 from model.position import Position
 
 

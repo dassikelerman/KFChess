@@ -5,7 +5,7 @@ import threading
 
 import websockets
 
-from events.serialization import JumpIntent, Login, MoveIntent, from_dict, to_dict
+from protocol.serialization import JumpIntent, Login, MoveIntent, from_dict, to_dict
 
 
 class WsClient:

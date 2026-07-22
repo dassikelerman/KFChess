@@ -8,7 +8,7 @@ from events.game_events import (
     MoveCompletedEvent,
     PromotionEvent,
 )
-from events.serialization import to_dict
+from protocol.serialization import to_dict
 from model.piece import PieceColor, PieceKind
 from model.position import Position
 from server.network_publisher import NetworkPublisher

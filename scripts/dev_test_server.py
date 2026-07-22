@@ -3,7 +3,7 @@ import json
 
 import websockets
 
-from events.serialization import Login, to_dict
+from protocol.serialization import Login, to_dict
 from server import ws_server
 
 RECV_TIMEOUT_S = 5

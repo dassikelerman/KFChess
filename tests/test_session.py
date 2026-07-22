@@ -1,6 +1,6 @@
 import constants
 from events.game_events import GameOverEvent, IllegalActionEvent, MoveCompletedEvent
-from events.serialization import JumpIntent, MoveIntent, to_dict
+from protocol.serialization import JumpIntent, MoveIntent, to_dict
 from model.piece import PieceColor
 from model.position import Position
 from server.session import Session

@@ -2,7 +2,7 @@ import logging
 
 from app.game_builder import build_game
 from events.game_events import GameOverEvent, IllegalActionEvent
-from events.serialization import JumpIntent, MoveIntent, from_dict
+from protocol.serialization import JumpIntent, MoveIntent, from_dict
 from model.piece import PieceColor
 
 _ROLES_BY_INDEX = ("white", "black")

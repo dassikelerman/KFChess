@@ -2,7 +2,7 @@ import asyncio
 import json
 
 import server.ws_server as ws_server
-from events.serialization import Login, to_dict
+from protocol.serialization import Login, to_dict
 from server.session import Session
 from server.user_store import UserStore
 

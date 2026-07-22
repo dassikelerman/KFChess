@@ -5,7 +5,7 @@ import logging
 import websockets
 
 import constants
-from events.serialization import snapshot_to_payload
+from protocol.serialization import snapshot_to_payload
 from server.game_loop import run_game_loop
 from server.network_publisher import NetworkPublisher
 from server.session import Session

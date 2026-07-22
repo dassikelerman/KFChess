@@ -6,7 +6,7 @@ from events.game_events import (
     MoveCompletedEvent,
     PromotionEvent,
 )
-from events.serialization import to_dict
+from protocol.serialization import to_dict
 
 # IllegalActionEvent is unicast-only, never broadcast (see server/session.py).
 _BROADCAST_EVENT_TYPES = (

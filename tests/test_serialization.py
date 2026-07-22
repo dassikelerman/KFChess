@@ -12,7 +12,7 @@ from events.game_events import (
     MoveCompletedEvent,
     PromotionEvent,
 )
-from events.serialization import JumpIntent, Login, MoveIntent, from_dict, snapshot_to_payload, to_dict
+from protocol.serialization import JumpIntent, Login, MoveIntent, from_dict, snapshot_to_payload, to_dict
 from model.piece import PieceColor, PieceKind
 from model.position import Position
 
