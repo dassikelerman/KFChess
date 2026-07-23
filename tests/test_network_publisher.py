@@ -8,10 +8,10 @@ from events.game_events import (
     MoveCompletedEvent,
     PromotionEvent,
 )
-from protocol.serialization import to_dict
+from protocol.registry import message_to_payload
 from model.piece import PieceColor, PieceKind
 from model.position import Position
-from server.network_publisher import NetworkPublisher
+from server.publisher import NetworkPublisher
 
 AT = Position(0, 0)
 
@@ -55,13 +55,13 @@ def make_publisher():
     return dispatcher, broadcast, unicast_calls
 
 
-def test_each_domain_game_event_type_is_broadcast_as_its_to_dict_form():
+def test_each_domain_game_event_type_is_broadcast_as_its_payload_form():
     dispatcher, broadcast, _ = make_publisher()
 
     for event in BROADCAST_SAMPLE_EVENTS:
         dispatcher.publish(event)
 
-    assert broadcast == [to_dict(event) for event in BROADCAST_SAMPLE_EVENTS]
+    assert broadcast == [message_to_payload(event) for event in BROADCAST_SAMPLE_EVENTS]
 
 
 def test_broadcast_fn_receives_nothing_until_an_event_is_published():
@@ -88,5 +88,5 @@ def test_unicast_calls_unicast_fn_with_exactly_that_connection_and_the_serialize
 
     publisher.unicast("conn-a", ILLEGAL_ACTION_SAMPLE)
 
-    assert unicast_calls == [("conn-a", to_dict(ILLEGAL_ACTION_SAMPLE))]
+    assert unicast_calls == [("conn-a", message_to_payload(ILLEGAL_ACTION_SAMPLE))]
     assert broadcast == []

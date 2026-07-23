@@ -65,3 +65,14 @@ class IllegalActionEvent:
     piece_id: Optional[str]
     destination: Position
     at_ms: int
+
+
+@dataclass(frozen=True)
+class PlayerDisconnectedEvent:
+    color: PieceColor
+    seconds_remaining: int
+
+
+@dataclass(frozen=True)
+class PlayerReconnectedEvent:
+    color: PieceColor

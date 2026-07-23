@@ -213,6 +213,55 @@ def test_capture_event_also_publishes_for_the_arrival_that_ends_the_game():
     assert events[0].captured_kind == PieceKind.KING
 
 
+# -- Resign ---------------------------------------------------------------
+
+
+def test_resign_publishes_game_over_with_the_opposite_color_as_winner():
+    engine, board, dispatcher = make_engine([["wK", ".", "."]])
+    events = collect(dispatcher, GameOverEvent)
+
+    engine.resign(PieceColor.WHITE)
+
+    assert engine.game_over is True
+    assert len(events) == 1
+    assert events[0].winner_color == PieceColor.BLACK
+
+
+def test_resign_by_black_makes_white_the_winner():
+    engine, board, dispatcher = make_engine([["wK", ".", "."]])
+    events = collect(dispatcher, GameOverEvent)
+
+    engine.resign(PieceColor.BLACK)
+
+    assert events[0].winner_color == PieceColor.WHITE
+
+
+def test_a_second_resign_call_is_a_no_op():
+    engine, board, dispatcher = make_engine([["wK", ".", "."]])
+    events = collect(dispatcher, GameOverEvent)
+
+    engine.resign(PieceColor.WHITE)
+    engine.resign(PieceColor.BLACK)  # must not publish again or flip the winner
+
+    assert len(events) == 1
+    assert events[0].winner_color == PieceColor.BLACK
+
+
+def test_resign_after_the_game_already_ended_some_other_way_is_a_no_op():
+    rows = [["wR", ".", "bK"]]
+    engine, board, dispatcher = make_engine(rows)
+    events = collect(dispatcher, GameOverEvent)
+
+    engine.request_move(Position(0, 0), Position(0, 2))
+    engine.wait(MOVE_DURATION * 2)
+    assert len(events) == 1  # the real capture-driven game over
+
+    engine.resign(PieceColor.BLACK)
+
+    assert len(events) == 1
+    assert events[0].winner_color == PieceColor.WHITE
+
+
 # -- Illegal action -----------------------------------------------------
 
 

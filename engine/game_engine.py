@@ -125,6 +125,12 @@ class GameEngine:
         self._arbiter.start_jump(position, end_time)
         return ActionResult(True, ActionResultReason.OK)
 
+    def resign(self, losing_color):
+        if self._game_over:
+            return
+        self._game_over = True
+        self._publish(GameOverEvent(winner_color=_other_color(losing_color), at_ms=self.clock))
+
     def wait(self, ms):
         self._advance(ms)
 

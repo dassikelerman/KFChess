@@ -101,7 +101,7 @@ def test_game_ui_snapshot_is_a_separate_object_from_the_engines_own_snapshot():
 
 
 class _FakeStateSource:
-    """Stands in for client/snapshot_view.py::SnapshotView - build_ui_snapshot
+    """Stands in for client/game_window.py::SnapshotView - build_ui_snapshot
     must work off just snapshot()/clock, the same two operations GameEngine
     exposes, with nothing else GameEngine-specific."""
 

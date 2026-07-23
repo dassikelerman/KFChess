@@ -1,4 +1,4 @@
-from client.snapshot_view import SnapshotView
+from client.game_window import SnapshotView
 from engine.game_conditions import KingCaptureWinCondition, LastRankPromotion
 from engine.game_engine import GameEngine
 from engine.snapshot import GameSnapshot, PieceSnapshot

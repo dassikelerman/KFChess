@@ -2,8 +2,10 @@ import subprocess
 import sys
 import time
 
-from client.ws_client import WsClient
+from client.server_connection import EventReceived, ServerConnection, SnapshotReceived
 from model.position import Position
+from protocol.lobby_messages import LoggedIn, RoomCreated
+from protocol.message_types import RoomAction
 from server.ws_server import HOST, PORT
 
 STARTUP_WAIT_S = 1
@@ -22,15 +24,25 @@ def _piece_at(snapshot, position):
     return None
 
 
-def _wait_for_snapshot(ws_client, condition, timeout):
+def _wait_for_event(connection, event_type, timeout):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        remaining = max(0.05, deadline - time.monotonic())
+        item = connection.inbound.get(timeout=remaining)
+        if isinstance(item, EventReceived) and isinstance(item.event, event_type):
+            return item.event
+    raise TimeoutError(f"no {event_type.__name__} received within {timeout}s")
+
+
+def _wait_for_snapshot(connection, condition, timeout):
     deadline = time.monotonic() + timeout
     latest = None
     while time.monotonic() < deadline:
         remaining = max(0.05, deadline - time.monotonic())
-        item = ws_client.inbound.get(timeout=remaining)
-        if item[0] != "snapshot":
+        item = connection.inbound.get(timeout=remaining)
+        if not isinstance(item, SnapshotReceived):
             continue
-        latest = item[1]
+        latest = item.game_snapshot
         if condition(latest):
             return latest
     raise TimeoutError(f"condition not met within {timeout}s - last snapshot: {latest}")
@@ -42,12 +54,17 @@ def main():
     try:
         time.sleep(STARTUP_WAIT_S)
 
-        client_process = subprocess.Popen([sys.executable, "-m", "client.run", WS_URL])
-        print("A client window should open shortly - watch it for the same move below.")
-
-        mover = WsClient(WS_URL)
+        mover = ServerConnection(WS_URL)
         mover.start()
         mover.send_login("mover", "devpass")
+        _wait_for_event(mover, LoggedIn, SNAPSHOT_TIMEOUT_S)
+        mover.send_room_intent(RoomAction.CREATE)
+        room_created = _wait_for_event(mover, RoomCreated, SNAPSHOT_TIMEOUT_S)
+        print(f"OK: 'mover' created room {room_created.room_id!r} and is seated as white")
+
+        client_process = subprocess.Popen([sys.executable, "-m", "client.run", WS_URL])
+        print("A client window should open shortly.")
+        print(f"To watch the same room, click Room and Join with id: {room_created.room_id}")
 
         before = _wait_for_snapshot(mover, condition=lambda s: True, timeout=SNAPSHOT_TIMEOUT_S)
         assert _piece_at(before, SOURCE) is not None, f"expected a piece at {SOURCE}"

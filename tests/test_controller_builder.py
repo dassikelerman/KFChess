@@ -56,7 +56,7 @@ class _FakePiece:
 
 
 class _FakeStateReader:
-    """Stands in for client/snapshot_view.py::SnapshotView - board_width and
+    """Stands in for client/game_window.py::SnapshotView - board_width and
     board_height are taken as plain ints rather than read off a Board, since
     the network client only has a GameSnapshot, not a real Board."""
 
