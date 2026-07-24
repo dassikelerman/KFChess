@@ -2,14 +2,13 @@ import inspect
 
 import pytest
 
-import server.router as router_module
 from model.position import Position
 from protocol.game_messages import JumpIntent, MoveIntent
 from protocol.lobby_messages import LoggedIn, Login, PlayIntent, RoomIntent
 from protocol.message_types import RoomAction
+from server.connection_lifecycle import ClientMessageRouter, MessageRejected, RoomPlacementRejected
+from server.contracts import Participant, ParticipantState
 from server.matchmaker import AlreadyQueuedError, MatchFound
-from server.participant import Participant, ParticipantState
-from server.router import ClientMessageRouter, MessageRejected, RoomPlacementRejected
 
 POSITION = Position(0, 0)
 
@@ -71,11 +70,13 @@ def _make_router():
     return ClientMessageRouter(game_room_registry, matchmaker), game_room_registry, matchmaker
 
 
-def test_router_module_has_no_json_or_websocket_specific_dependencies():
+def test_client_message_router_class_has_no_json_or_websocket_specific_dependencies():
     # ClientMessageRouter must stay fully decoupled from the wire format - it only ever
     # sees already-typed messages ConnectionLifecycle decoded, never json or websockets.
-    source = inspect.getsource(router_module)
-    assert "import json" not in source
+    # ConnectionLifecycle (same module) does need both, so this checks the class's own
+    # source, not the whole file.
+    source = inspect.getsource(ClientMessageRouter)
+    assert "json" not in source
     assert "websockets" not in source
 
 

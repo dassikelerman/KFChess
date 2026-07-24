@@ -4,13 +4,13 @@ import constants
 from events.game_events import GameOverEvent, PlayerDisconnectedEvent
 from model.piece import PieceColor
 from model.position import Position
-from server.participant import Participant, ParticipantState
+from server.contracts import Participant, ParticipantState
 from server.rating import RatingStore
 from server.rooms import GameRoomRegistry, RoomPlacement
 from server.user_store import UserStore
 
 
-def _make_registry(tick_ms=5, rating_store=None):
+def _make_registry(rating_store=None):
     sent = []
 
     def send_fn(connection, payload):
@@ -18,7 +18,7 @@ def _make_registry(tick_ms=5, rating_store=None):
 
     if rating_store is None:
         rating_store = RatingStore(":memory:")
-    return GameRoomRegistry(send_fn, rating_store, tick_ms=tick_ms), sent
+    return GameRoomRegistry(send_fn, rating_store), sent
 
 
 def _make_participant(label):
@@ -127,18 +127,19 @@ def test_two_rooms_have_independent_sessions_and_game_state():
     asyncio.run(scenario())
 
 
-def test_remove_client_on_the_last_connection_cancels_the_game_loop_and_removes_the_room():
+def test_remove_client_on_the_last_connection_removes_the_room():
     async def scenario():
-        registry, _ = _make_registry(tick_ms=5)
+        registry, _ = _make_registry()
         participant = _make_participant("a")
         placement = registry.create_private_room(participant)
-        task = registry._game_loop_tasks_by_room_id[placement.room_id]
 
         became_empty = await registry.remove_participant(participant)
 
         assert became_empty is True
-        assert task.done()
-        assert task.cancelled()
+        assert placement.room_id not in registry._sessions_by_room_id
+        assert placement.room_id not in registry._connections_by_room_id
+
+        registry.tick(16)  # a tick after removal must not raise or resurrect the room
         assert placement.room_id not in registry._sessions_by_room_id
 
     asyncio.run(scenario())
@@ -151,12 +152,10 @@ def test_remove_client_leaves_the_room_intact_when_other_connections_remain():
         placement = registry.create_private_room(creator)
         second = _make_participant("b")
         registry.join_private_room(second, placement.room_id)
-        task = registry._game_loop_tasks_by_room_id[placement.room_id]
 
         became_empty = await registry.remove_participant(creator)
 
         assert became_empty is False
-        assert not task.done()
         assert placement.room_id in registry._sessions_by_room_id
 
         await registry.remove_participant(second)
@@ -164,7 +163,41 @@ def test_remove_client_leaves_the_room_intact_when_other_connections_remain():
     asyncio.run(scenario())
 
 
-def test_an_exception_in_one_rooms_game_loop_is_logged_and_does_not_affect_another_room(caplog):
+def test_tick_advances_every_active_room_and_broadcasts_one_snapshot_each():
+    async def scenario():
+        registry, sent = _make_registry()
+        participant_a = _make_participant("a")
+        participant_b = _make_participant("b")
+        placement_a = registry.create_private_room(participant_a)
+        placement_b = registry.create_private_room(participant_b)
+        clock_a_before = placement_a.session.components.engine.clock
+        clock_b_before = placement_b.session.components.engine.clock
+
+        registry.tick(16)
+
+        assert placement_a.session.components.engine.clock == clock_a_before + 16
+        assert placement_b.session.components.engine.clock == clock_b_before + 16
+        snapshot_payloads = [payload for _, payload in sent if payload["type"] == "GameSnapshot"]
+        assert len(snapshot_payloads) == 2  # exactly one per active room, per tick
+
+        await registry.remove_participant(participant_a)
+        await registry.remove_participant(participant_b)
+
+    asyncio.run(scenario())
+
+
+def test_a_room_removed_during_iteration_by_an_earlier_room_does_not_crash_the_tick():
+    # Simulates a room disappearing mid-tick (e.g. another room's tick tears it down) -
+    # tick() must tolerate a room_id it already snapshotted no longer being present.
+    registry, _ = _make_registry()
+    participant = _make_participant("a")
+    placement = registry.create_private_room(participant)
+    del registry._sessions_by_room_id[placement.room_id]
+
+    registry.tick(16)  # must not raise
+
+
+def test_an_exception_in_one_rooms_tick_is_logged_and_does_not_affect_another_room(caplog):
     async def scenario():
         failing_connection = "conn-fail"
 
@@ -172,27 +205,24 @@ def test_an_exception_in_one_rooms_game_loop_is_logged_and_does_not_affect_anoth
             if connection == failing_connection:
                 raise RuntimeError("boom")
 
-        registry = GameRoomRegistry(send_fn, RatingStore(":memory:"), tick_ms=5)
+        registry = GameRoomRegistry(send_fn, RatingStore(":memory:"))
         failing_participant = Participant(connection=failing_connection)
         healthy_participant = _make_participant("healthy")
 
         failing_placement = registry.create_private_room(failing_participant)
         healthy_placement = registry.create_private_room(healthy_participant)
 
-        failing_task = registry._game_loop_tasks_by_room_id[failing_placement.room_id]
-        healthy_task = registry._game_loop_tasks_by_room_id[healthy_placement.room_id]
-
         with caplog.at_level("ERROR"):
-            for _ in range(50):
-                if failing_task.done():
-                    break
-                await asyncio.sleep(0.01)
+            registry.tick(16)
 
-        assert failing_task.done()
-        assert not healthy_task.done()
-        assert "game loop for room" in caplog.text
+        assert "game tick for room" in caplog.text
+        # A failing room is logged and skipped, not torn down and not allowed to stop
+        # the healthy room's tick from happening.
+        assert failing_placement.room_id in registry._sessions_by_room_id
+        assert healthy_placement.session.components.engine.clock == 16
 
         await registry.remove_participant(healthy_participant)
+        await registry.remove_participant(failing_participant)
 
     asyncio.run(scenario())
 
@@ -225,14 +255,8 @@ def test_create_private_room_wires_a_real_rating_store_into_the_sessions_rating_
 
 def test_disconnect_countdown_params_are_threaded_into_every_session_it_builds():
     async def scenario():
-        sleep_calls = []
-
-        async def fake_sleep(seconds):
-            sleep_calls.append(seconds)
-
         registry = GameRoomRegistry(
-            lambda connection, payload: None, RatingStore(":memory:"),
-            disconnect_countdown_seconds=2, sleep=fake_sleep,
+            lambda connection, payload: None, RatingStore(":memory:"), disconnect_countdown_seconds=2,
         )
         white_participant = _make_participant("white")
         black_participant = _make_participant("black")
@@ -243,11 +267,10 @@ def test_disconnect_countdown_params_are_threaded_into_every_session_it_builds()
         placement.session.components.dispatcher.subscribe(PlayerDisconnectedEvent, events.append)
 
         placement.session.begin_disconnect_countdown(white_participant.connection)
-        task = placement.session._countdown_tasks_by_color[PieceColor.WHITE]
-        await task
+        placement.session.tick(1000)
+        placement.session.tick(1000)
 
         assert [e.seconds_remaining for e in events] == [2, 1, 0]
-        assert sleep_calls == [1, 1]
         assert placement.session.components.engine.game_over is True
 
         await registry.remove_participant(white_participant)

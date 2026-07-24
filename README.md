@@ -1,73 +1,72 @@
 # KungFu Chess
 
-Real-time variant of chess: moves and jumps resolve after a delay instead
-of instantly, and a "jump" onto a square can intercept an incoming enemy
-move.
+A real-time variant of chess: moves and jumps resolve after a delay instead of
+instantly, and a "jump" onto a square can intercept an incoming enemy move.
+Play locally in one process, or connect multiple clients to a WebSocket
+server for real matches with matchmaking, private rooms, reconnection, and
+ELO ratings.
+
+See [docs/architecture.md](docs/architecture.md) for how the pieces fit
+together - layers, message flow, and the server's timing model.
 
 ## Project layout
 
 ```
-config/    settings.py            - all constants (timing, colors, pawn config)
-board/     board_interface.py     - abstract BoardRepresentation
-           text_board.py          - concrete text-token implementation
-rules/     movement_strategy.py   - MovementStrategy interface + MoveContext
-           piece_rules.py         - King/Queen/Rook/Bishop/Knight/Pawn strategies
-           rule_registry.py       - PieceRuleRegistry (Registry/Factory pattern)
-           game_conditions.py     - WinCondition / PromotionRule strategies
-game/      models.py              - Move / Jump value objects
-           parser.py              - input parsing + board construction
-           engine.py              - GameEngine (turn orchestration)
-           renderer.py            - board -> text rendering
-tests/     test_*.py              - unit tests (pytest)
-main.py    entry point + dependency wiring
+model/       Piece, Position, Board, GameState - core data, no rules baked in
+rules/       PieceRuleRegistry + per-piece MovementStrategy, win/promotion conditions
+realtime/    RealTimeArbiter - tracks in-flight motions/jumps/rest against a clock
+engine/      GameEngine - turn orchestration on top of board+rules+arbiter+realtime
+board_io/    parse board text into a Board, print a Board back to text
+events/      EventDispatcher (pub/sub) + the game's event types + local subscribers
+             (ScoreTracker, ActionHistory, SoundSystem)
+app/         build_game(board_text) - wires one GameComponents bundle (engine+board+dispatcher)
+input/       Controller + build_controller() - click/jump handling shared by every
+             front end (local view, text mode, networked client)
+view/        cv2 rendering: GameView, animations, and view/theme.py (named colors/sizes)
+text/        a terminal-only front end, driven by a script file instead of clicks
+protocol/    the wire format - typed messages, a type-tagged JSON registry, snapshot
+             and event codecs (see docs/architecture.md for the full message list)
+server/      the authoritative WebSocket server - see docs/architecture.md
+client/      the networked GUI client - login, lobby, then GameWindow
+scripts/     small manual smoke-test scripts (not part of the pytest suite)
+tests/       pytest suite - one test file per module, plus *_end_to_end.py for
+             full client<->server scenarios over a real socket
 ```
 
-## How the 4 requirements are addressed
+`view/run.py` is a local, no-network route through the same engine (handy for
+quick manual testing); `client/run.py` is the networked client and does not
+replace it.
 
-1. **Future binary representation** - all game logic talks only to the
-   `BoardRepresentation` interface (`board/board_interface.py`). The only
-   concrete implementation today, `TextBoardRepresentation`, stores tokens
-   like `"wK"`, but a future `BitboardRepresentation` could implement the
-   same interface using integers internally without any other file
-   changing.
+## Installing
 
-2. **No hardcoded rules** - each piece's movement is a `MovementStrategy`
-   registered by letter in a `PieceRuleRegistry`
-   (`rules/rule_registry.py`). Registering a new kind (e.g. a custom
-   "Champion" piece) automatically makes it a legal board token too, since
-   `game/parser.py` derives valid tokens from the registry instead of a
-   fixed string. Win conditions and promotion are likewise pluggable
-   strategies (`rules/game_conditions.py`).
+Requires Python 3.10+. From the repository root:
 
-3. **Clean code** - one responsibility per module/class (parsing, board
-   storage, movement rules, turn orchestration, rendering are all
-   separate); no duplicated logic (e.g. `path_is_clear` is shared by
-   Rook/Bishop/Queen); no magic numbers (all constants live in
-   `config/settings.py`); the board's internal list-of-lists storage is
-   private and only reachable through its public interface.
+```
+pip install -e ".[client,server,dev]"
+```
 
-4. **Tests & DI** - `tests/` covers every module. `GameEngine` and `main.run`
-   take all collaborators (board, registry, win condition, promotion rule,
-   config) as constructor/function arguments, so tests substitute fakes
-   (see `tests/test_engine.py`) instead of monkeypatching.
+This is an editable install, so code changes take effect immediately with no
+`sys.path` hacks needed. Install only what you need instead of everything:
 
-## Known open item
+- `.[client]` - opencv-python + websockets, for running the GUI client
+- `.[server]` - websockets only (no opencv-python - the server never renders anything)
+- `.[dev]` - pytest + pytest-cov, for running the test suite
 
-The original code set pawn double-step eligibility with
-`start_row = 1 if color == "w" else 6`, which was flagged as uncertain in
-a comment (pawns are placed on row 6 for white in the sample board, so a
-double step from row 1 doesn't actually apply to them). This has been
-preserved as-is in `config.PAWN_START_ROW = {"w": 1, "b": 6}` rather than
-silently changed - flip the values there if white's double-step should
-work from row 6 instead.
+## Running
+
+```
+python -m server.ws_server              # start the server (ws://localhost:8765)
+python -m client.run ws://localhost:8765  # start a client
+python -m view.run                        # local, no-network single-process game
+```
 
 ## Running tests
 
 ```
-pip install pytest
 pytest
 ```
 
-## Repository
-
-`<insert-git-repository-url-here>` (see header comment in `main.py`)
+Coverage is configured in `pyproject.toml` (`pytest --cov` for a report); run
+`pytest --cov` to see it. There's no 100%-coverage gate - the threshold is set
+a bit below the measured baseline so it stays meaningful without being a
+tripwire on every small change.

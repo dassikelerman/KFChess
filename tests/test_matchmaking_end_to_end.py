@@ -37,8 +37,9 @@ def test_two_compatible_players_are_matched_and_a_third_incompatible_player_expi
     shared_rating_store = RatingStore(db_path)
     monkeypatch.setattr(ws_server, "UserStore", lambda: shared_user_store)
     monkeypatch.setattr(ws_server, "RatingStore", lambda: shared_rating_store)
+    # The global server loop already ticks every SERVER_TICK_MS (~16ms) by default -
+    # no separate expiry-poll interval to shorten now, just the expiry duration itself.
     monkeypatch.setattr(ws_server, "MATCH_EXPIRY_S", 1)
-    monkeypatch.setattr(ws_server, "EXPIRY_POLL_S", 0.2)
 
     # alice and bob keep the default 1200 rating (compatible). carol is bumped
     # far outside the +/-100 tolerance so she stays queued until she expires.

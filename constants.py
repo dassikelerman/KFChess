@@ -8,9 +8,9 @@ SHORT_REST_DURATION = 500
 COLORS = tuple(c.value for c in PieceColor)
 PAWN_DIRECTION = {"w": -1, "b": 1}
 EMPTY_CELL = "."
-BOARD_IMAGE_PATH = "board.png"
-PIECES_DIR = "pieces2"
-SOUNDS_DIR = "sounds"
+BOARD_IMAGE_PATH = "assets/board.png"
+PIECES_DIR = "assets/pieces2"
+SOUNDS_DIR = "assets/sounds"
 PANEL_WIDTH = 220
 
 STANDARD_START_BOARD = [

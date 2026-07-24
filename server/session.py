@@ -9,10 +9,15 @@ NetworkPublisher turns its dispatcher events into wire messages.
 handle_move/handle_jump take already-decoded MoveIntent/JumpIntent objects - the typed
 message ConnectionLifecycle decoded off the wire, unchanged all the way from
 ClientMessageRouter. Nothing in this file ever converts to or from a dict.
+
+Disconnect countdowns are simulated time, not real time: tick(dt_ms) - the same call
+that advances the engine's clock - is the only thing that ever advances a countdown.
+There is no asyncio task or sleep here, so an idle room costs nothing and the whole
+server can run off one shared loop (see GameRoomRegistry.tick / server/ws_server.py).
 """
 
-import asyncio
 import logging
+from dataclasses import dataclass
 
 import constants
 from app.game_builder import build_game
@@ -24,7 +29,7 @@ from events.game_events import (
 )
 from model.piece import PieceColor
 from protocol.game_messages import JumpIntent, MoveIntent
-from server.interfaces import RatingRepository, Sleeper
+from server.contracts import RatingRepository
 
 # "role" (who a connection is: white/black/spectator) and PieceColor (which
 # side a piece belongs to) are deliberately separate representations, not a
@@ -39,22 +44,26 @@ _ROLE_BY_COLOR = {PieceColor.WHITE: "white", PieceColor.BLACK: "black"}
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class DisconnectCountdown:
+    remaining_ms: int
+    last_published_second: int
+
+
 class GameSession:
     def __init__(
         self, board_text, make_network_publisher,
         rating_store: RatingRepository | None = None,
         disconnect_countdown_seconds: int = constants.DISCONNECT_COUNTDOWN_SECONDS,
-        sleep: Sleeper = asyncio.sleep,
     ):
         self.components = build_game(board_text)
         self._network_publisher = make_network_publisher(self.components.dispatcher)
         self._rating_store = rating_store
-        self._disconnect_countdown_seconds = disconnect_countdown_seconds
-        self._sleep = sleep
+        self._disconnect_countdown_ms = disconnect_countdown_seconds * 1000
         self._roles = {}
         self._usernames = {}
         self._ratings_updated = False
-        self._countdown_tasks_by_color = {}
+        self._countdowns_by_color = {}
         if rating_store is not None:
             self.components.dispatcher.subscribe(GameOverEvent, self._on_game_over)
 
@@ -79,9 +88,11 @@ class GameSession:
             return
 
         color = _COLOR_BY_ROLE[role]
-        if color in self._countdown_tasks_by_color:
+        if color in self._countdowns_by_color:
             return
-        self._countdown_tasks_by_color[color] = asyncio.create_task(self._run_disconnect_countdown(color))
+        countdown = DisconnectCountdown(remaining_ms=self._disconnect_countdown_ms, last_published_second=-1)
+        self._countdowns_by_color[color] = countdown
+        self._publish_countdown_if_changed(color, countdown)
 
     def reconnect(self, new_connection, username):
         old_connection = self._connection_for_username(username)
@@ -89,10 +100,9 @@ class GameSession:
             return None
 
         color = _COLOR_BY_ROLE.get(self._roles.get(old_connection))
-        countdown_task = self._countdown_tasks_by_color.pop(color, None)
-        if countdown_task is None:
+        if color not in self._countdowns_by_color:
             return None
-        countdown_task.cancel()
+        del self._countdowns_by_color[color]
 
         role = self._roles.pop(old_connection)
         self._usernames.pop(old_connection)
@@ -101,24 +111,30 @@ class GameSession:
         self.components.dispatcher.publish(PlayerReconnectedEvent(color=color))
         return role
 
-    async def _run_disconnect_countdown(self, color):
-        try:
-            for seconds_remaining in range(self._disconnect_countdown_seconds, -1, -1):
-                if self.components.engine.game_over:
-                    return
-                self.components.dispatcher.publish(
-                    PlayerDisconnectedEvent(color=color, seconds_remaining=seconds_remaining)
-                )
-                if seconds_remaining > 0:
-                    await self._sleep(1)
-            self.components.engine.resign(color)
-        finally:
-            self._countdown_tasks_by_color.pop(color, None)
-
     # -- tick and engine actions ---------------------------------------------
 
     def tick(self, dt_ms):
         self.components.engine.wait(dt_ms)
+        if self.components.engine.game_over:
+            self._countdowns_by_color.clear()
+            return
+        for color in list(self._countdowns_by_color):
+            self._advance_countdown(color, dt_ms)
+
+    def _advance_countdown(self, color, dt_ms):
+        countdown = self._countdowns_by_color[color]
+        countdown.remaining_ms = max(0, countdown.remaining_ms - dt_ms)
+        self._publish_countdown_if_changed(color, countdown)
+        if countdown.remaining_ms <= 0:
+            del self._countdowns_by_color[color]
+            self.components.engine.resign(color)
+
+    def _publish_countdown_if_changed(self, color, countdown):
+        displayed_second = -(-countdown.remaining_ms // 1000)  # ceil(remaining_ms / 1000)
+        if displayed_second == countdown.last_published_second:
+            return
+        countdown.last_published_second = displayed_second
+        self.components.dispatcher.publish(PlayerDisconnectedEvent(color=color, seconds_remaining=displayed_second))
 
     def handle_move(self, connection, intent: MoveIntent):
         engine = self.components.engine

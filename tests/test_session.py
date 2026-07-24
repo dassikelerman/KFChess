@@ -1,7 +1,4 @@
-import asyncio
 import inspect
-
-import pytest
 
 import constants
 import server.session as session_module
@@ -326,37 +323,29 @@ def test_a_session_built_without_a_rating_store_does_not_subscribe_to_game_over(
     session.components.dispatcher.publish(GameOverEvent(winner_color=PieceColor.WHITE, at_ms=100))
 
 
-# -- disconnect countdown --------------------------------------------
+# -- disconnect countdown: driven only by tick(dt_ms), no asyncio task/sleep ----
 
 
-def test_a_full_disconnect_countdown_publishes_every_tick_and_resigns_at_zero():
-    async def scenario():
-        sleep_calls = []
+def test_a_full_disconnect_countdown_publishes_each_second_and_resigns_at_zero():
+    session = _make_session(disconnect_countdown_seconds=3)
+    session.assign_role("conn-a")  # white
+    session.assign_role("conn-b")  # black
+    disconnect_events = []
+    game_over_events = []
+    session.components.dispatcher.subscribe(PlayerDisconnectedEvent, disconnect_events.append)
+    session.components.dispatcher.subscribe(GameOverEvent, game_over_events.append)
 
-        async def fake_sleep(seconds):
-            sleep_calls.append(seconds)
+    session.begin_disconnect_countdown("conn-a")  # white drops, publishes 3 immediately
+    session.tick(1000)
+    session.tick(1000)
+    session.tick(1000)
 
-        session = _make_session(disconnect_countdown_seconds=3, sleep=fake_sleep)
-        session.assign_role("conn-a")  # white
-        session.assign_role("conn-b")  # black
-        disconnect_events = []
-        game_over_events = []
-        session.components.dispatcher.subscribe(PlayerDisconnectedEvent, disconnect_events.append)
-        session.components.dispatcher.subscribe(GameOverEvent, game_over_events.append)
-
-        session.begin_disconnect_countdown("conn-a")  # white drops
-        task = session._countdown_tasks_by_color[PieceColor.WHITE]
-        await task
-
-        assert [e.seconds_remaining for e in disconnect_events] == [3, 2, 1, 0]
-        assert all(e.color == PieceColor.WHITE for e in disconnect_events)
-        assert sleep_calls == [1, 1, 1]
-        assert session.components.engine.game_over is True
-        assert len(game_over_events) == 1
-        assert game_over_events[0].winner_color == PieceColor.BLACK
-        assert session._countdown_tasks_by_color == {}
-
-    asyncio.run(scenario())
+    assert [e.seconds_remaining for e in disconnect_events] == [3, 2, 1, 0]
+    assert all(e.color == PieceColor.WHITE for e in disconnect_events)
+    assert session.components.engine.game_over is True
+    assert len(game_over_events) == 1
+    assert game_over_events[0].winner_color == PieceColor.BLACK
+    assert session._countdowns_by_color == {}
 
 
 def test_a_spectator_disconnect_does_not_start_a_countdown():
@@ -367,69 +356,77 @@ def test_a_spectator_disconnect_does_not_start_a_countdown():
 
     session.begin_disconnect_countdown("conn-c")
 
-    assert session._countdown_tasks_by_color == {}
+    assert session._countdowns_by_color == {}
 
 
-def test_the_game_ending_for_another_reason_stops_the_countdown_early():
-    async def scenario():
-        sleep_calls = []
+def test_the_game_ending_for_another_reason_stops_the_countdown_before_the_next_publish():
+    session = _make_session(disconnect_countdown_seconds=5)
+    session.assign_role("conn-a")  # white
+    session.assign_role("conn-b")  # black
+    disconnect_events = []
+    session.components.dispatcher.subscribe(PlayerDisconnectedEvent, disconnect_events.append)
 
-        async def fake_sleep(seconds):
-            sleep_calls.append(seconds)
-            if len(sleep_calls) == 1:
-                session.components.engine.resign(PieceColor.BLACK)  # game ends independently
+    session.begin_disconnect_countdown("conn-a")  # white drops, publishes 5 immediately
+    session.components.engine.resign(PieceColor.BLACK)  # game ends independently
+    session.tick(1000)  # would have published 4, but the game is already over
 
-        session = _make_session(disconnect_countdown_seconds=5, sleep=fake_sleep)
-        session.assign_role("conn-a")  # white
-        session.assign_role("conn-b")  # black
-        disconnect_events = []
-        session.components.dispatcher.subscribe(PlayerDisconnectedEvent, disconnect_events.append)
+    assert [e.seconds_remaining for e in disconnect_events] == [5]
+    assert session._countdowns_by_color == {}
 
-        session.begin_disconnect_countdown("conn-a")  # white drops
-        task = session._countdown_tasks_by_color[PieceColor.WHITE]
-        await task
 
-        # Only the first tick (5) was published - the independent resign() during
-        # its sleep() flips game_over, so the next loop iteration returns without
-        # publishing tick 4 or calling resign() a second time.
-        assert [e.seconds_remaining for e in disconnect_events] == [5]
-        assert sleep_calls == [1]
-        assert session.components.engine.game_over is True
+def test_a_large_tick_jumps_straight_to_the_correct_remaining_second_and_resigns():
+    # A single tick can be far larger than 1000ms (a slow server tick, or a room that
+    # was idle for a while) - the countdown must not require one tick per second.
+    session = _make_session(disconnect_countdown_seconds=20)
+    session.assign_role("conn-a")  # white
+    session.assign_role("conn-b")  # black
+    disconnect_events = []
+    session.components.dispatcher.subscribe(PlayerDisconnectedEvent, disconnect_events.append)
 
-    asyncio.run(scenario())
+    session.begin_disconnect_countdown("conn-a")  # publishes 20 immediately
+    session.tick(45_000)  # one huge tick, far past the 20s deadline
+
+    assert [e.seconds_remaining for e in disconnect_events] == [20, 0]
+    assert session.components.engine.game_over is True
+    assert session._countdowns_by_color == {}
+
+
+def test_a_sub_second_tick_does_not_publish_a_duplicate_event_for_the_same_second():
+    session = _make_session(disconnect_countdown_seconds=5)
+    session.assign_role("conn-a")  # white
+    session.assign_role("conn-b")  # black
+    disconnect_events = []
+    session.components.dispatcher.subscribe(PlayerDisconnectedEvent, disconnect_events.append)
+
+    session.begin_disconnect_countdown("conn-a")  # publishes 5 immediately
+    session.tick(100)  # 5000ms -> 4900ms, still displays as "5"
+
+    assert [e.seconds_remaining for e in disconnect_events] == [5]
 
 
 def test_reconnecting_within_the_grace_window_cancels_the_countdown_and_swaps_the_connection():
-    async def scenario():
-        async def fake_sleep(seconds):
-            pass
+    session = _make_session(disconnect_countdown_seconds=20)
+    session.assign_role("conn-a")  # white
+    session.assign_role("conn-b")  # black
+    session.record_login("conn-a", "alice")
+    session.record_login("conn-b", "bob")
+    reconnected_events = []
+    session.components.dispatcher.subscribe(PlayerReconnectedEvent, reconnected_events.append)
 
-        session = _make_session(disconnect_countdown_seconds=20, sleep=fake_sleep)
-        session.assign_role("conn-a")  # white
-        session.assign_role("conn-b")  # black
-        session.record_login("conn-a", "alice")
-        session.record_login("conn-b", "bob")
-        reconnected_events = []
-        session.components.dispatcher.subscribe(PlayerReconnectedEvent, reconnected_events.append)
+    session.begin_disconnect_countdown("conn-a")
 
-        session.begin_disconnect_countdown("conn-a")
-        task = session._countdown_tasks_by_color[PieceColor.WHITE]
+    role = session.reconnect("conn-a-new", "alice")
 
-        role = session.reconnect("conn-a-new", "alice")
+    assert role == "white"
+    assert session._roles["conn-a-new"] == "white"
+    assert session._usernames["conn-a-new"] == "alice"
+    assert "conn-a" not in session._roles
+    assert "conn-a" not in session._usernames
+    assert session._countdowns_by_color == {}
+    assert [e.color for e in reconnected_events] == [PieceColor.WHITE]
 
-        assert role == "white"
-        assert session._roles["conn-a-new"] == "white"
-        assert session._usernames["conn-a-new"] == "alice"
-        assert "conn-a" not in session._roles
-        assert "conn-a" not in session._usernames
-        assert session._countdown_tasks_by_color == {}
-        assert [e.color for e in reconnected_events] == [PieceColor.WHITE]
-
-        with pytest.raises(asyncio.CancelledError):
-            await task
-        assert session.components.engine.game_over is False
-
-    asyncio.run(scenario())
+    session.tick(20_000 + 1000)  # even a tick past the original deadline must not resign
+    assert session.components.engine.game_over is False
 
 
 def test_reconnecting_a_username_with_no_active_countdown_fails():
@@ -447,42 +444,27 @@ def test_reconnecting_an_unknown_username_fails():
 
 
 def test_reconnecting_after_the_countdown_already_resigned_fails():
-    async def scenario():
-        async def fake_sleep(seconds):
-            pass
+    session = _make_session(disconnect_countdown_seconds=1)
+    session.assign_role("conn-a")  # white
+    session.assign_role("conn-b")  # black
+    session.record_login("conn-a", "alice")
+    session.record_login("conn-b", "bob")
 
-        session = _make_session(disconnect_countdown_seconds=1, sleep=fake_sleep)
-        session.assign_role("conn-a")  # white
-        session.assign_role("conn-b")  # black
-        session.record_login("conn-a", "alice")
-        session.record_login("conn-b", "bob")
+    session.begin_disconnect_countdown("conn-a")
+    session.tick(1000)  # runs the countdown to zero and resigns
 
-        session.begin_disconnect_countdown("conn-a")
-        task = session._countdown_tasks_by_color[PieceColor.WHITE]
-        await task  # runs to completion and resigns
-
-        assert session.reconnect("conn-a-new", "alice") is None
-
-    asyncio.run(scenario())
+    assert session.reconnect("conn-a-new", "alice") is None
 
 
 def test_a_duplicate_disconnect_signal_does_not_start_a_second_countdown():
-    async def scenario():
-        async def fake_sleep(seconds):
-            pass
+    session = _make_session(disconnect_countdown_seconds=5)
+    session.assign_role("conn-a")  # white
+    session.assign_role("conn-b")  # black
 
-        session = _make_session(disconnect_countdown_seconds=5, sleep=fake_sleep)
-        session.assign_role("conn-a")  # white
-        session.assign_role("conn-b")  # black
+    session.begin_disconnect_countdown("conn-a")
+    first_countdown = session._countdowns_by_color[PieceColor.WHITE]
 
-        session.begin_disconnect_countdown("conn-a")
-        first_task = session._countdown_tasks_by_color[PieceColor.WHITE]
+    session.begin_disconnect_countdown("conn-a")  # duplicate signal for the same connection
+    second_countdown = session._countdowns_by_color[PieceColor.WHITE]
 
-        session.begin_disconnect_countdown("conn-a")  # duplicate signal for the same connection
-        second_task = session._countdown_tasks_by_color[PieceColor.WHITE]
-
-        assert first_task is second_task
-
-        await first_task
-
-    asyncio.run(scenario())
+    assert first_countdown is second_countdown

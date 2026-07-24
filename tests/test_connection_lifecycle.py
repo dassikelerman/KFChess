@@ -6,9 +6,8 @@ import pytest
 from protocol.lobby_messages import Login, RoomIntent
 from protocol.message_types import RoomAction
 from protocol.registry import message_to_payload
-from server.router import ClientMessageRouter
-from server.participant import Participant, ParticipantState
-from server.connection_lifecycle import ConnectionLifecycle
+from server.connection_lifecycle import ClientMessageRouter, ConnectionLifecycle
+from server.contracts import Participant, ParticipantState
 from server.rating import RatingStore
 from server.rooms import GameRoomRegistry
 from server.matchmaker import Matchmaker
@@ -156,13 +155,13 @@ def test_no_password_appears_in_the_logs_even_on_a_wrong_password_rejection(tmp_
 # -- Part 4: real ROOM flow (real GameRoomRegistry + real ClientMessageRouter) ----
 
 
-def _make_real_lifecycle(user_store, rating_store, tick_ms=5):
+def _make_real_lifecycle(user_store, rating_store):
     sent = []
 
     def send_fn(connection, payload):
         sent.append((connection, payload))
 
-    game_room_registry = GameRoomRegistry(send_fn, rating_store, tick_ms=tick_ms)
+    game_room_registry = GameRoomRegistry(send_fn, rating_store)
     router = ClientMessageRouter(game_room_registry, Matchmaker())
     disconnect_calls = []
 

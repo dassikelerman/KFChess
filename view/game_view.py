@@ -4,20 +4,19 @@ from model.piece import PieceColor
 from view.piece_animations import frame_index_for
 from view.img import Img
 from view.piece_state_machine import PieceStateMachine
-
-REST_OVERLAY_COLOR_BGR = (230, 160, 90)
-REST_OVERLAY_ALPHA = 0.55
-
-SELECTION_FRAME_COLOR_BGR = (60, 220, 255)
-SELECTION_FRAME_THICKNESS = 4
-SELECTION_FRAME_ALPHA = 0.85
-
-PANEL_BACKGROUND_BGR = {PieceColor.BLACK: (30, 30, 30), PieceColor.WHITE: (235, 235, 235)}
-PANEL_TEXT_BGR = {PieceColor.BLACK: (255, 255, 255), PieceColor.WHITE: (20, 20, 20)}
-PANEL_TEXT_MARGIN = 14
-PANEL_LINE_HEIGHT = 24
-PANEL_SCORE_FONT_SIZE = 0.7
-PANEL_ACTION_FONT_SIZE = 0.42
+from view.theme import (
+    PANEL_ACTION_FONT_SIZE,
+    PANEL_BACKGROUND_BGR,
+    PANEL_LINE_HEIGHT,
+    PANEL_SCORE_FONT_SIZE,
+    PANEL_TEXT_BGR,
+    PANEL_TEXT_MARGIN,
+    REST_OVERLAY_ALPHA,
+    REST_OVERLAY_COLOR_BGR,
+    SELECTION_FRAME_ALPHA,
+    SELECTION_FRAME_COLOR_BGR,
+    SELECTION_FRAME_THICKNESS,
+)
 
 
 class GameView:

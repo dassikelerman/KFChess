@@ -1,27 +1,35 @@
-"""ConnectionLifecycle: authentication, receive loop, routing, disconnect cleanup.
+"""ConnectionLifecycle + ClientMessageRouter: the incoming-message pipeline, in order.
 
-The only place that touches a raw `connection` object end to end: register it,
-authenticate it (the login handshake lives right here - it has exactly one caller and
-is simply step one of the story this class already narrates), try to seat it back into
-a game it disconnected from, decode each incoming message exactly once and hand the
-typed result to ClientMessageRouter, then translate whatever the router returns into
-the actual outbound JSON. Everything the router/GameRoomRegistry/Matchmaker decide is
-synchronous and typed, with no socket or JSON in sight; this class is the async adapter
-between that world and the real network.
+Together these two classes are the whole receive -> decode -> validate state -> route
+story for one connection. ConnectionLifecycle is the only place that touches a raw
+`connection` object end to end: register it, authenticate it (the login handshake lives
+right here - it has exactly one caller and is simply step one of the story this class
+already narrates), try to seat it back into a game it disconnected from, decode each
+incoming message exactly once, and translate whatever comes back into the actual
+outbound JSON. ClientMessageRouter is what "whatever comes back" means: it checks the
+participant's own state (already in a room? already authenticated?) and only then
+dispatches to a GameRoomRegistry, a Matchmaker, or a GameSession.
+
+Kept as two classes rather than folded into one - state-checking-and-dispatch is a
+distinct responsibility from owning a socket, and each is independently testable without
+the other (ClientMessageRouter never touches a socket, JSON, or a dict; every message it
+sees has already been decoded once by ConnectionLifecycle).
 """
 
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
 
 import websockets
 
-from protocol.lobby_messages import LoggedIn, Login, RoomCreated, RoomIntent, RoomRejected
+from protocol.game_messages import JumpIntent, MoveIntent
+from protocol.lobby_messages import LoggedIn, Login, PlayIntent, RoomCreated, RoomIntent, RoomRejected
 from protocol.message_types import RoomAction
 from protocol.registry import decode_json_message, encode_json_message
-from server.participant import Participant, ParticipantState
+from server.contracts import Participant, ParticipantState
+from server.matchmaker import AlreadyQueuedError, MatchFound
 from server.rooms import RoomPlacement, room_placement_payloads
-from server.router import MessageRejected, RoomPlacementRejected
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +81,93 @@ async def await_login(connection, user_store):
         return None
 
     return username
+
+
+class MessageRejected(Exception):
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class RoomPlacementRejected:
+    reason: str
+
+
+class ClientMessageRouter:
+    def __init__(self, game_room_registry, matchmaker):
+        self._game_room_registry = game_room_registry
+        self._matchmaker = matchmaker
+
+    def try_reconnect(self, participant):
+        return self._game_room_registry.try_reconnect(participant)
+
+    def route(self, participant, message):
+        if isinstance(message, Login):
+            return self._route_login(participant)
+        if isinstance(message, (MoveIntent, JumpIntent)):
+            return self._route_game_action(participant, message)
+        if isinstance(message, PlayIntent):
+            return self._route_play_intent(participant)
+        if isinstance(message, RoomIntent):
+            return self._route_room_intent(participant, message)
+        self._reject(participant, f"unrecognized message type {type(message).__name__!r}")
+
+    def _route_login(self, participant):
+        if participant.authenticated:
+            self._reject(participant, "already authenticated")
+
+    def _route_game_action(self, participant, message):
+        if participant.state is not ParticipantState.IN_ROOM:
+            self._reject(
+                participant, f"{type(message).__name__} requires an active room (state={participant.state.name})",
+            )
+        session = self._game_room_registry.game_session_for(participant)
+        if session is None:
+            self._reject(participant, "no active game session for this room")
+
+        if isinstance(message, MoveIntent):
+            session.handle_move(participant.connection, message)
+        else:
+            session.handle_jump(participant.connection, message)
+
+    def _route_play_intent(self, participant):
+        if participant.state is ParticipantState.IN_ROOM:
+            self._reject(participant, "already in a room")
+        try:
+            result = self._matchmaker.enqueue_or_match(participant)
+        except AlreadyQueuedError:
+            self._reject(participant, "already queued for a match")
+            return
+
+        if isinstance(result, MatchFound):
+            self._game_room_registry.create_matched_room(result.white, result.black)
+        else:
+            participant.state = ParticipantState.SEARCHING
+
+    def _route_room_intent(self, participant, message):
+        if participant.state is ParticipantState.IN_ROOM:
+            self._reject(participant, "already in a room")
+        if message.action is RoomAction.CREATE:
+            return self._game_room_registry.create_private_room(participant)
+        return self._route_room_join(participant, message.room_id)
+
+    def _route_room_join(self, participant, room_id):
+        placement = self._game_room_registry.join_private_room(participant, room_id)
+        if placement is None:
+            logger.warning(
+                "room join rejected: connection_id=%s username=%s room_id=%s reason=unknown room",
+                participant.connection_id, participant.username, room_id,
+            )
+            return RoomPlacementRejected(reason="unknown room")
+        return placement
+
+    def _reject(self, participant, reason):
+        logger.warning(
+            "rejected message: connection_id=%s username=%s state=%s reason=%s",
+            participant.connection_id, participant.username, participant.state.name, reason,
+        )
+        raise MessageRejected(reason)
 
 
 class ConnectionLifecycle:

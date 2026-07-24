@@ -18,6 +18,7 @@ import constants
 from client.server_connection import EventReceived, SnapshotReceived
 from events.game_events import GameOverEvent, PlayerDisconnectedEvent, PlayerReconnectedEvent
 from view.game_ui_snapshot import build_ui_snapshot
+from view.theme import DISCONNECT_WARNING_COLOR_BGR, HUD_TEXT_FONT_SIZE, HUD_TEXT_THICKNESS, ROOM_LABEL_COLOR_BGR
 
 logger = logging.getLogger(__name__)
 
@@ -96,12 +97,14 @@ class GameWindow:
             if self._room_id is not None:
                 cv2.putText(
                     frame.img, f"Room: {self._room_id}", (10, 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2, cv2.LINE_AA,
+                    cv2.FONT_HERSHEY_SIMPLEX, HUD_TEXT_FONT_SIZE, ROOM_LABEL_COLOR_BGR,
+                    HUD_TEXT_THICKNESS, cv2.LINE_AA,
                 )
             if self._disconnect_warning is not None:
                 cv2.putText(
                     frame.img, self._disconnect_warning, (10, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2, cv2.LINE_AA,
+                    cv2.FONT_HERSHEY_SIMPLEX, HUD_TEXT_FONT_SIZE, DISCONNECT_WARNING_COLOR_BGR,
+                    HUD_TEXT_THICKNESS, cv2.LINE_AA,
                 )
             frame.show(constants.WINDOW_NAME)
 

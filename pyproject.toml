@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kf-chess"
+version = "0.1.0"
+description = "KungFu Chess: a real-time chess variant where moves and jumps resolve after a delay"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+# The engine/model/rules layer (dependencies = []) needs nothing beyond the
+# standard library. These two extras are split because a headless server
+# deployment has no reason to pull in opencv-python (a GUI/image library) -
+# only the client renders anything.
+client = ["opencv-python", "websockets"]
+server = ["websockets"]
+dev = ["pytest", "pytest-cov"]
+
+[tool.setuptools]
+py-modules = ["constants", "logging_setup"]
+
+[tool.setuptools.packages.find]
+include = [
+    "app*", "board_io*", "client*", "engine*", "events*", "input*",
+    "model*", "protocol*", "realtime*", "rules*", "server*", "text*", "view*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = [
+    "app", "board_io", "client", "engine", "events", "input",
+    "model", "protocol", "realtime", "rules", "server", "text", "view",
+    "constants", "logging_setup",
+]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+skip_covered = false
+show_missing = true
+# Measured baseline is ~88% (2026-07-24); set a bit below that so the
+# threshold is real without being a tripwire on every small change.
+fail_under = 85

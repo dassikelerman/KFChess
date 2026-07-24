@@ -96,15 +96,37 @@ class ServerConnection:
         logger.info("connecting to %s", self._url)
         try:
             async with websockets.connect(self._url) as connection:
-                await asyncio.gather(self._receive(connection), self._send(connection))
+                await self._run_receive_and_send(connection)
         except websockets.ConnectionClosed as e:
             reason = e.rcvd.reason if e.rcvd is not None else ""
             logger.info("connection closed: reason=%r", reason)
             self.inbound.put(ConnectionClosed(reason=reason))
         finally:
-            # Guarantees the worker thread blocked in _send's Queue.get() wakes up
-            # even when _receive is the side that ended the connection.
+            # Guarantees the worker thread blocked in _send's Queue.get() wakes up no
+            # matter which side ends the connection, or how - including _receive ending
+            # with no exception at all, which is what a clean server-side close does.
             self._outbound.put(_CLOSE_SENTINEL)
+
+    async def _run_receive_and_send(self, connection):
+        # Not asyncio.gather(): gather() only returns early when one side *raises* - a
+        # clean server-side close ends _receive's loop with no exception, so gather()
+        # would then wait forever for _send too, which is itself blocked on the outbound
+        # queue with nothing left to wake it. asyncio.wait(FIRST_COMPLETED) returns the
+        # moment either side ends for any reason, and we cancel whichever is still going.
+        receive_task = asyncio.create_task(self._receive(connection))
+        send_task = asyncio.create_task(self._send(connection))
+        done, pending = await asyncio.wait({receive_task, send_task}, return_when=asyncio.FIRST_COMPLETED)
+
+        for task in pending:
+            task.cancel()
+        for task in pending:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        for task in done:
+            task.result()  # re-raise whatever ended the pump, e.g. websockets.ConnectionClosed
 
     async def _receive(self, connection):
         async for raw in connection:

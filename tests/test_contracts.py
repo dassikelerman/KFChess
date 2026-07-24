@@ -1,4 +1,4 @@
-from server.participant import Participant, ParticipantState
+from server.contracts import Participant, ParticipantState
 
 
 def test_construction_defaults():
