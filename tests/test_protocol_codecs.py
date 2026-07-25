@@ -23,6 +23,7 @@ from protocol.lobby_messages import (
     Login,
     MatchNotFound,
     PlayIntent,
+    RoleAssigned,
     RoomCreated,
     RoomIntent,
     RoomRejected,
@@ -99,6 +100,8 @@ SAMPLES = [
     RoomRejected(reason="room_full"),
     MatchNotFound(),
     MatchNotFound(reason="opponent_declined"),
+    RoleAssigned(role="white", room_id="room-1"),
+    RoleAssigned(role="spectator", room_id="room-2"),
 ]
 
 

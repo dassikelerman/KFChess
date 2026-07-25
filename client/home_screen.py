@@ -23,10 +23,8 @@ import cv2
 
 import constants
 from client.lobby_view import LobbyView, WINDOW_NAME
-from client.server_connection import (
-    ConnectionClosed, EventReceived, RoleAssigned, ServerConnection, SnapshotReceived,
-)
-from protocol.lobby_messages import LoggedIn, MatchNotFound, RoomCreated, RoomRejected
+from client.server_connection import ConnectionClosed, EventReceived, ServerConnection, SnapshotReceived
+from protocol.lobby_messages import LoggedIn, MatchNotFound, RoleAssigned, RoomCreated, RoomRejected
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +84,8 @@ def run_lobby(connection):
                     logger.info("matchmaking gave up: reason=%s", item.event.reason)
                     view.set_searching(False)
                     _show_match_not_found(item.event.reason)
-                elif isinstance(item, RoleAssigned):
-                    role = item.role
+                elif isinstance(item, EventReceived) and isinstance(item.event, RoleAssigned):
+                    role = item.event.role
                 elif isinstance(item, SnapshotReceived):
                     logger.info("placed in room: room_id=%s role=%s", room_id, role)
                     return room_id, role, item.game_snapshot, item.clock_ms

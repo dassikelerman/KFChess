@@ -185,7 +185,7 @@ def test_create_room_sequence_receives_room_created_then_role_then_snapshot_in_o
         await lifecycle.run(connection)
 
         sent_types = [json.loads(payload)["type"] for payload in connection.sent]
-        assert sent_types == ["LoggedIn", "RoomCreated", "role", "GameSnapshot"]
+        assert sent_types == ["LoggedIn", "RoomCreated", "RoleAssigned", "GameSnapshot"]
         assert json.loads(connection.sent[2])["role"] == "white"
 
     asyncio.run(scenario())
@@ -225,7 +225,7 @@ def test_a_second_client_joining_an_existing_room_gets_black_and_the_rooms_real_
         await lifecycle.run(second_connection)
 
         sent_types = [json.loads(payload)["type"] for payload in second_connection.sent]
-        assert sent_types == ["LoggedIn", "role", "GameSnapshot"]
+        assert sent_types == ["LoggedIn", "RoleAssigned", "GameSnapshot"]
         assert json.loads(second_connection.sent[1])["role"] == "black"
 
         expected_pieces = message_to_payload(placement.session.components.engine.snapshot())["pieces"]

@@ -59,14 +59,14 @@ def _piece_at(snapshot_payload, row, col):
 async def _create_private_room(connection):
     await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
     room_created = await _expect(connection, "RoomCreated")
-    await _expect(connection, "role")
+    await _expect(connection, "RoleAssigned")
     snapshot = await _expect(connection, "GameSnapshot")
     return room_created["room_id"], snapshot
 
 
 async def _join_private_room(connection, room_id):
     await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
-    await _expect(connection, "role")
+    await _expect(connection, "RoleAssigned")
     return await _expect(connection, "GameSnapshot")
 
 
@@ -131,9 +131,9 @@ def test_concurrent_private_and_matched_rooms_do_not_leak_snapshots_or_events(tm
             await _login(frank, "frank")
             await eve.send(json.dumps(message_to_payload(PlayIntent())))
             await frank.send(json.dumps(message_to_payload(PlayIntent())))
-            await _expect(eve, "role")
+            await _expect(eve, "RoleAssigned")
             snapshot_eve = await _expect(eve, "GameSnapshot")
-            await _expect(frank, "role")
+            await _expect(frank, "RoleAssigned")
             snapshot_frank = await _expect(frank, "GameSnapshot")
 
             pristine_pieces = snapshot_carol["pieces"]

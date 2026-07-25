@@ -295,8 +295,8 @@ def test_create_matched_room_sends_role_and_snapshot_to_both_connections_with_co
 
         white_payloads = [payload for connection, payload in sent if connection == "conn-white"]
         black_payloads = [payload for connection, payload in sent if connection == "conn-black"]
-        assert [p["type"] for p in white_payloads] == ["role", "GameSnapshot"]
-        assert [p["type"] for p in black_payloads] == ["role", "GameSnapshot"]
+        assert [p["type"] for p in white_payloads] == ["RoleAssigned", "GameSnapshot"]
+        assert [p["type"] for p in black_payloads] == ["RoleAssigned", "GameSnapshot"]
         assert white_payloads[0]["role"] == "white"
         assert black_payloads[0]["role"] == "black"
 

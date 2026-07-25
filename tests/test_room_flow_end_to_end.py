@@ -81,14 +81,14 @@ def test_login_create_room_join_room_and_a_move_is_visible_to_both(tmp_path, mon
             await client_a.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
             room_created = await _expect(client_a, "RoomCreated")
             room_id = room_created["room_id"]
-            role_a = await _expect(client_a, "role")
+            role_a = await _expect(client_a, "RoleAssigned")
             assert role_a["role"] == "white"
             snapshot_a = await _expect(client_a, "GameSnapshot")
 
             client_b = await _connect(uri)
             await _login(client_b, "bob")
             await client_b.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
-            role_b = await _expect(client_b, "role")
+            role_b = await _expect(client_b, "RoleAssigned")
             assert role_b["role"] == "black"
             snapshot_b = await _expect(client_b, "GameSnapshot")
 

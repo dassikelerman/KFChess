@@ -34,11 +34,6 @@ class SnapshotReceived:
 
 
 @dataclass(frozen=True)
-class RoleAssigned:
-    role: str
-
-
-@dataclass(frozen=True)
 class EventReceived:
     event: object
 
@@ -148,8 +143,6 @@ class ServerConnection:
             clock_ms = data.pop("clock_ms")
             game_snapshot = message_from_payload(data)
             self.inbound.put(SnapshotReceived(game_snapshot=game_snapshot, clock_ms=clock_ms))
-        elif message_type == MessageType.ROLE:
-            self.inbound.put(RoleAssigned(role=data["role"]))
         else:
             event = message_from_payload(data)
             self.inbound.put(EventReceived(event=event))

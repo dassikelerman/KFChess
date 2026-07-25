@@ -63,9 +63,9 @@ def test_two_compatible_players_are_matched_and_a_third_incompatible_player_expi
             await client_a.send(json.dumps(message_to_payload(PlayIntent())))
             await client_b.send(json.dumps(message_to_payload(PlayIntent())))
 
-            role_a = await _expect(client_a, "role")
+            role_a = await _expect(client_a, "RoleAssigned")
             snapshot_a = await _expect(client_a, "GameSnapshot")
-            role_b = await _expect(client_b, "role")
+            role_b = await _expect(client_b, "RoleAssigned")
             snapshot_b = await _expect(client_b, "GameSnapshot")
 
             assert {role_a["role"], role_b["role"]} == {"white", "black"}

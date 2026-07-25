@@ -28,7 +28,7 @@ async def _create_room(connection, username):
     await _login(connection, username)
     await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
     room_created = await _expect(connection, "RoomCreated")
-    role_message = await _expect(connection, "role")
+    role_message = await _expect(connection, "RoleAssigned")
     assert role_message["role"] == "white", role_message
     await _expect(connection, "GameSnapshot")
     print(f"OK: {username!r} created room {room_created['room_id']!r} and is seated as white")
@@ -38,7 +38,7 @@ async def _create_room(connection, username):
 async def _join_room(connection, username, room_id, expected_role):
     await _login(connection, username)
     await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
-    role_message = await _expect(connection, "role")
+    role_message = await _expect(connection, "RoleAssigned")
     assert role_message["role"] == expected_role, role_message
     await _expect(connection, "GameSnapshot")
     print(f"OK: {username!r} joined room {room_id!r} and is seated as {expected_role!r}")

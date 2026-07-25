@@ -1,8 +1,9 @@
 import json
 
-from client.server_connection import EventReceived, RoleAssigned, ServerConnection, SnapshotReceived
+from client.server_connection import EventReceived, ServerConnection, SnapshotReceived
 from engine.snapshot import GameSnapshot, PieceSnapshot
 from events.game_events import CaptureEvent, MoveCompletedEvent
+from protocol.lobby_messages import RoleAssigned
 from protocol.registry import message_to_payload
 from model.piece import PieceColor, PieceKind
 from model.position import Position
@@ -74,13 +75,15 @@ def test_a_different_event_type_also_decodes_correctly():
     assert item.event == event
 
 
-def test_a_role_message_is_decoded_and_tagged_role():
+def test_a_role_assigned_message_decodes_through_the_generic_event_path():
     client = make_client()
-    raw = json.dumps({"type": "role", "role": "black"})
+    raw = json.dumps(message_to_payload(RoleAssigned(role="black", room_id="room-1")))
 
     client._handle_message(raw)
 
-    assert client.inbound.get_nowait() == RoleAssigned(role="black")
+    item = client.inbound.get_nowait()
+    assert isinstance(item, EventReceived)
+    assert item.event == RoleAssigned(role="black", room_id="room-1")
 
 
 def test_multiple_messages_queue_in_order():
@@ -103,18 +106,18 @@ def test_multiple_messages_queue_in_order():
 
 
 def test_the_servers_actual_connection_sequence_decodes_cleanly():
-    # server/ws_server.py sends "role" then the initial snapshot on every
+    # server/ws_server.py sends a RoleAssigned then the initial snapshot on every
     # new connection - both must decode without error, in that order.
     client = make_client()
     snapshot = make_snapshot()
     snapshot_payload = message_to_payload(snapshot)
     snapshot_payload["clock_ms"] = 0
 
-    client._handle_message(json.dumps({"type": "role", "role": "white"}))
+    client._handle_message(json.dumps(message_to_payload(RoleAssigned(role="white", room_id="room-1"))))
     client._handle_message(json.dumps(snapshot_payload))
 
     role_item = client.inbound.get_nowait()
     snapshot_item = client.inbound.get_nowait()
-    assert role_item == RoleAssigned(role="white")
+    assert role_item == EventReceived(event=RoleAssigned(role="white", room_id="room-1"))
     assert isinstance(snapshot_item, SnapshotReceived)
     assert snapshot_item.game_snapshot == snapshot

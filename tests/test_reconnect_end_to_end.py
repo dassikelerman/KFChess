@@ -61,12 +61,12 @@ def test_reconnecting_with_the_same_username_within_the_grace_window_rejoins_the
 
             await client_a.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
             room_created = await _expect(client_a, "RoomCreated")
-            await _expect(client_a, "role")
+            await _expect(client_a, "RoleAssigned")
             await _expect(client_a, "GameSnapshot")
 
             room_id = room_created["room_id"]
             await client_b.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
-            await _expect(client_b, "role")
+            await _expect(client_b, "RoleAssigned")
             await _expect(client_b, "GameSnapshot")
 
             await client_a.close()  # alice (white) drops mid-game
@@ -78,7 +78,7 @@ def test_reconnecting_with_the_same_username_within_the_grace_window_rejoins_the
             # the server should push her straight back into her old seat, no RoomIntent/PlayIntent needed.
             client_a2 = await websockets.connect(uri, close_timeout=CLIENT_CLOSE_TIMEOUT_S)
             await _login(client_a2, "alice")
-            role = await _expect(client_a2, "role")
+            role = await _expect(client_a2, "RoleAssigned")
             assert role["role"] == "white"
             await _expect(client_a2, "GameSnapshot")
 

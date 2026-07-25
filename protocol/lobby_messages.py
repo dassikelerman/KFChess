@@ -52,6 +52,12 @@ class MatchNotFound:
     reason: str = "no_match_found"
 
 
+@dataclass(frozen=True)
+class RoleAssigned:
+    role: str
+    room_id: str
+
+
 def _login_fields(login):
     return {"username": login.username, "password": login.password}
 
@@ -115,6 +121,14 @@ def _match_not_found_kwargs(data):
     return dict(reason=data["reason"])
 
 
+def _role_assigned_fields(message):
+    return {"role": message.role, "room_id": message.room_id}
+
+
+def _role_assigned_kwargs(data):
+    return dict(role=data["role"], room_id=data["room_id"])
+
+
 register("Login", Login, _login_fields, _login_kwargs)
 register("LoggedIn", LoggedIn, _logged_in_fields, _logged_in_kwargs)
 register("PlayIntent", PlayIntent, _play_intent_fields, _play_intent_kwargs)
@@ -122,3 +136,4 @@ register("RoomIntent", RoomIntent, _room_intent_fields, _room_intent_kwargs)
 register("RoomCreated", RoomCreated, _room_created_fields, _room_created_kwargs)
 register("RoomRejected", RoomRejected, _room_rejected_fields, _room_rejected_kwargs)
 register("MatchNotFound", MatchNotFound, _match_not_found_fields, _match_not_found_kwargs)
+register("RoleAssigned", RoleAssigned, _role_assigned_fields, _role_assigned_kwargs)

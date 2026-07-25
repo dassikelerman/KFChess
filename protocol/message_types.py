@@ -21,10 +21,7 @@ class MessageType(StrEnum):
     ROOM_CREATED = "RoomCreated"
     ROOM_REJECTED = "RoomRejected"
     MATCH_NOT_FOUND = "MatchNotFound"
-    # Handshake-only, hand-built as a plain dict (see server/rooms.py) rather
-    # than going through the protocol.registry message registry - hence lowercase,
-    # unlike every class-name-derived tag above.
-    ROLE = "role"
+    ROLE_ASSIGNED = "RoleAssigned"
 
 
 class RoomAction(StrEnum):

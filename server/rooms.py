@@ -15,7 +15,8 @@ import secrets
 from dataclasses import dataclass
 
 import constants
-from protocol.message_types import MessageType
+from protocol.lobby_messages import RoleAssigned
+from protocol.registry import message_to_payload
 from protocol.snapshot_codec import snapshot_to_payload
 from server.contracts import MessageSender, ParticipantState, RatingRepository
 from server.publisher import NetworkPublisher
@@ -32,7 +33,7 @@ class RoomPlacement:
 
 
 def room_placement_payloads(placement):
-    role_payload = {"type": MessageType.ROLE.value, "role": placement.role}
+    role_payload = message_to_payload(RoleAssigned(role=placement.role, room_id=placement.room_id))
     snapshot = placement.session.components.engine.snapshot()
     clock_ms = placement.session.components.engine.clock
     snapshot_payload = snapshot_to_payload(snapshot, clock_ms)

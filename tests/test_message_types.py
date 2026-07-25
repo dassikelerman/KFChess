@@ -15,7 +15,6 @@ def test_message_type_values_match_the_wire_tags_already_in_use():
     assert MessageType.MOVE_INTENT == "MoveIntent"
     assert MessageType.JUMP_INTENT == "JumpIntent"
     assert MessageType.LOGIN == "Login"
-    assert MessageType.ROLE == "role"
 
 
 def test_message_type_values_for_the_new_lobby_and_matchmaking_messages():
@@ -25,6 +24,7 @@ def test_message_type_values_for_the_new_lobby_and_matchmaking_messages():
     assert MessageType.ROOM_CREATED == "RoomCreated"
     assert MessageType.ROOM_REJECTED == "RoomRejected"
     assert MessageType.MATCH_NOT_FOUND == "MatchNotFound"
+    assert MessageType.ROLE_ASSIGNED == "RoleAssigned"
 
 
 def test_room_action_values():
