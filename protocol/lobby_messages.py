@@ -6,7 +6,7 @@ game - see game_messages.py for the in-game MoveIntent/JumpIntent.
 
 from dataclasses import dataclass
 
-from protocol.message_types import RoomAction
+from protocol.message_types import MessageType, RoomAction
 from protocol.registry import register
 
 
@@ -129,11 +129,11 @@ def _role_assigned_kwargs(data):
     return dict(role=data["role"], room_id=data["room_id"])
 
 
-register("Login", Login, _login_fields, _login_kwargs)
-register("LoggedIn", LoggedIn, _logged_in_fields, _logged_in_kwargs)
-register("PlayIntent", PlayIntent, _play_intent_fields, _play_intent_kwargs)
-register("RoomIntent", RoomIntent, _room_intent_fields, _room_intent_kwargs)
-register("RoomCreated", RoomCreated, _room_created_fields, _room_created_kwargs)
-register("RoomRejected", RoomRejected, _room_rejected_fields, _room_rejected_kwargs)
-register("MatchNotFound", MatchNotFound, _match_not_found_fields, _match_not_found_kwargs)
-register("RoleAssigned", RoleAssigned, _role_assigned_fields, _role_assigned_kwargs)
+register(MessageType.LOGIN, Login, _login_fields, _login_kwargs)
+register(MessageType.LOGGED_IN, LoggedIn, _logged_in_fields, _logged_in_kwargs)
+register(MessageType.PLAY_INTENT, PlayIntent, _play_intent_fields, _play_intent_kwargs)
+register(MessageType.ROOM_INTENT, RoomIntent, _room_intent_fields, _room_intent_kwargs)
+register(MessageType.ROOM_CREATED, RoomCreated, _room_created_fields, _room_created_kwargs)
+register(MessageType.ROOM_REJECTED, RoomRejected, _room_rejected_fields, _room_rejected_kwargs)
+register(MessageType.MATCH_NOT_FOUND, MatchNotFound, _match_not_found_fields, _match_not_found_kwargs)
+register(MessageType.ROLE_ASSIGNED, RoleAssigned, _role_assigned_fields, _role_assigned_kwargs)

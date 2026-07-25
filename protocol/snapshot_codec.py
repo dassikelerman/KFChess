@@ -8,6 +8,7 @@ in both game state and domain events.
 from engine.snapshot import GameSnapshot, PieceSnapshot
 from model.piece import PieceColor, PieceKind
 from model.position import Position
+from protocol.message_types import MessageType
 from protocol.registry import message_to_payload, register
 
 
@@ -75,7 +76,7 @@ def _game_snapshot_kwargs(data):
     )
 
 
-register("GameSnapshot", GameSnapshot, _game_snapshot_fields, _game_snapshot_kwargs)
+register(MessageType.GAME_SNAPSHOT, GameSnapshot, _game_snapshot_fields, _game_snapshot_kwargs)
 
 
 def snapshot_to_payload(snapshot, clock_ms):

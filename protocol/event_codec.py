@@ -16,6 +16,7 @@ from events.game_events import (
     PromotionEvent,
 )
 from model.piece import PieceColor, PieceKind
+from protocol.message_types import MessageType
 from protocol.registry import register
 from protocol.snapshot_codec import color_from_value, color_to_value, position_from_dict, position_to_dict
 
@@ -174,18 +175,18 @@ def _player_reconnected_kwargs(data):
     return dict(color=PieceColor(data["color"]))
 
 
-register("MoveCompletedEvent", MoveCompletedEvent, _move_completed_fields, _move_completed_kwargs)
-register("CaptureEvent", CaptureEvent, _capture_fields, _capture_kwargs)
-register("JumpCompletedEvent", JumpCompletedEvent, _jump_completed_fields, _jump_completed_kwargs)
-register("MotionStoppedEvent", MotionStoppedEvent, _motion_stopped_fields, _motion_stopped_kwargs)
-register("PromotionEvent", PromotionEvent, _promotion_fields, _promotion_kwargs)
-register("GameOverEvent", GameOverEvent, _game_over_fields, _game_over_kwargs)
-register("IllegalActionEvent", IllegalActionEvent, _illegal_action_fields, _illegal_action_kwargs)
+register(MessageType.MOVE_COMPLETED, MoveCompletedEvent, _move_completed_fields, _move_completed_kwargs)
+register(MessageType.CAPTURE, CaptureEvent, _capture_fields, _capture_kwargs)
+register(MessageType.JUMP_COMPLETED, JumpCompletedEvent, _jump_completed_fields, _jump_completed_kwargs)
+register(MessageType.MOTION_STOPPED, MotionStoppedEvent, _motion_stopped_fields, _motion_stopped_kwargs)
+register(MessageType.PROMOTION, PromotionEvent, _promotion_fields, _promotion_kwargs)
+register(MessageType.GAME_OVER, GameOverEvent, _game_over_fields, _game_over_kwargs)
+register(MessageType.ILLEGAL_ACTION, IllegalActionEvent, _illegal_action_fields, _illegal_action_kwargs)
 register(
-    "PlayerDisconnectedEvent", PlayerDisconnectedEvent,
+    MessageType.PLAYER_DISCONNECTED, PlayerDisconnectedEvent,
     _player_disconnected_fields, _player_disconnected_kwargs,
 )
 register(
-    "PlayerReconnectedEvent", PlayerReconnectedEvent,
+    MessageType.PLAYER_RECONNECTED, PlayerReconnectedEvent,
     _player_reconnected_fields, _player_reconnected_kwargs,
 )

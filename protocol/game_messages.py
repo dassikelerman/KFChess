@@ -7,6 +7,7 @@ everything else is connection/lobby bookkeeping (see lobby_messages.py).
 from dataclasses import dataclass
 
 from model.position import Position
+from protocol.message_types import MessageType
 from protocol.registry import register
 from protocol.snapshot_codec import position_from_dict, position_to_dict
 
@@ -44,5 +45,5 @@ def _jump_intent_kwargs(data):
     return dict(position=position_from_dict(data["position"]))
 
 
-register("MoveIntent", MoveIntent, _move_intent_fields, _move_intent_kwargs)
-register("JumpIntent", JumpIntent, _jump_intent_fields, _jump_intent_kwargs)
+register(MessageType.MOVE_INTENT, MoveIntent, _move_intent_fields, _move_intent_kwargs)
+register(MessageType.JUMP_INTENT, JumpIntent, _jump_intent_fields, _jump_intent_kwargs)
