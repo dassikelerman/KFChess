@@ -10,11 +10,12 @@ the caller, so it is fully unit-tested with no network and no real sleeping.
 from dataclasses import dataclass
 
 import constants
+from server.contracts import Participant
 
 
 @dataclass
 class MatchmakingEntry:
-    participant: object
+    participant: Participant
     username: str
     rating: int
     waited_ms: int = 0
@@ -22,18 +23,18 @@ class MatchmakingEntry:
 
 @dataclass(frozen=True)
 class MatchFound:
-    white: object
-    black: object
+    white: Participant
+    black: Participant
 
 
 @dataclass(frozen=True)
 class MatchQueued:
-    participant: object
+    participant: Participant
 
 
 @dataclass(frozen=True)
 class ExpiredMatch:
-    participant: object
+    participant: Participant
 
 
 class AlreadyQueuedError(Exception):
