@@ -1,4 +1,4 @@
-from server.user_store import UserStore
+from server.user_store import LoginResult, UserStore
 
 
 def make_store(tmp_path):
@@ -8,21 +8,21 @@ def make_store(tmp_path):
 def test_a_new_username_is_created(tmp_path):
     store = make_store(tmp_path)
 
-    assert store.create_or_verify("alice", "hunter2") == "created"
+    assert store.create_or_verify("alice", "hunter2") is LoginResult.CREATED
 
 
 def test_an_existing_username_with_the_correct_password_is_authenticated(tmp_path):
     store = make_store(tmp_path)
     store.create_or_verify("alice", "hunter2")
 
-    assert store.create_or_verify("alice", "hunter2") == "authenticated"
+    assert store.create_or_verify("alice", "hunter2") is LoginResult.AUTHENTICATED
 
 
 def test_an_existing_username_with_the_wrong_password_is_rejected(tmp_path):
     store = make_store(tmp_path)
     store.create_or_verify("alice", "hunter2")
 
-    assert store.create_or_verify("alice", "wrong-password") == "wrong_password"
+    assert store.create_or_verify("alice", "wrong-password") is LoginResult.WRONG_PASSWORD
 
 
 def test_passwords_are_never_stored_in_plain_text(tmp_path):

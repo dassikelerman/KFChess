@@ -30,6 +30,7 @@ from protocol.registry import decode_json_message, encode_json_message
 from server.contracts import Participant, ParticipantState
 from server.matchmaker import AlreadyQueuedError, MatchFound
 from server.rooms import RoomPlacement, room_placement_payloads
+from server.user_store import LoginResult
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ async def await_login(connection, user_store):
         await connection.close(code=REJECTED_LOGIN_CLOSE_CODE, reason=rejection_reason)
         return None
 
-    if user_store.create_or_verify(username, password) == "wrong_password":
+    if user_store.create_or_verify(username, password) is LoginResult.WRONG_PASSWORD:
         await connection.close(code=REJECTED_LOGIN_CLOSE_CODE, reason="wrong password")
         return None
 

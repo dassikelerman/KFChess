@@ -1,11 +1,18 @@
 import hashlib
 import secrets
 import sqlite3
+from enum import StrEnum
 
 import constants
 
 DEFAULT_DB_PATH = "server/kf_chess_users.db"
 _PBKDF2_ITERATIONS = 200_000
+
+
+class LoginResult(StrEnum):
+    CREATED = "created"
+    AUTHENTICATED = "authenticated"
+    WRONG_PASSWORD = "wrong_password"
 
 
 def _hash_password(password, salt_hex):
@@ -41,9 +48,9 @@ class UserStore:
                 (username, _hash_password(password, salt), salt),
             )
             self._connection.commit()
-            return "created"
+            return LoginResult.CREATED
 
         stored_hash, salt = row
         if _hash_password(password, salt) == stored_hash:
-            return "authenticated"
-        return "wrong_password"
+            return LoginResult.AUTHENTICATED
+        return LoginResult.WRONG_PASSWORD
