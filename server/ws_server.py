@@ -21,7 +21,8 @@ import constants
 from logging_setup import configure_logging
 from protocol.lobby_messages import MatchNotFound
 from protocol.registry import message_to_payload
-from server.connection_lifecycle import ClientMessageRouter, ConnectionLifecycle
+from server.client_message_router import ClientMessageRouter
+from server.connection_lifecycle import ConnectionLifecycle
 from server.contracts import MessageSender, ParticipantState
 from server.matchmaker import Matchmaker
 from server.rating import RatingStore

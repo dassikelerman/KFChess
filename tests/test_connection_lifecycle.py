@@ -6,7 +6,8 @@ import pytest
 from protocol.lobby_messages import Login, RoomIntent
 from protocol.message_types import RoomAction
 from protocol.registry import message_to_payload
-from server.connection_lifecycle import ClientMessageRouter, ConnectionLifecycle
+from server.client_message_router import ClientMessageRouter
+from server.connection_lifecycle import ConnectionLifecycle
 from server.contracts import Participant, ParticipantState
 from server.rating import RatingStore
 from server.rooms import GameRoomRegistry

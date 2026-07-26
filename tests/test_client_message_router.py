@@ -6,7 +6,7 @@ from model.position import Position
 from protocol.game_messages import JumpIntent, MoveIntent
 from protocol.lobby_messages import LoggedIn, Login, PlayIntent, RoomIntent
 from protocol.message_types import RoomAction
-from server.connection_lifecycle import ClientMessageRouter, MessageRejected, RoomPlacementRejected
+from server.client_message_router import ClientMessageRouter, MessageRejected, RoomPlacementRejected
 from server.contracts import Participant, ParticipantState
 from server.matchmaker import AlreadyQueuedError, MatchFound
 
