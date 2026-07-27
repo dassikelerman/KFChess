@@ -16,8 +16,7 @@ import logging
 
 import websockets
 
-from protocol.lobby_messages import LoggedIn, Login, RoomCreated, RoomIntent, RoomRejected
-from protocol.message_types import RoomAction
+from protocol.lobby_messages import LoggedIn, Login, RoomRejected
 from protocol.registry import decode_json_message, encode_json_message
 from server.client_message_router import MessageRejected, RoomPlacementRejected
 from server.contracts import Participant, ParticipantState
@@ -148,18 +147,15 @@ class ConnectionLifecycle:
             logger.exception("unexpected failure routing a message: connection_id=%s", participant.connection_id)
             return
 
-        await self._apply_route_result(participant, message, result)
+        await self._apply_route_result(participant, result)
 
-    async def _apply_route_result(self, participant, message, result):
+    async def _apply_route_result(self, participant, result):
         if isinstance(result, RoomPlacement):
-            created = isinstance(message, RoomIntent) and message.action is RoomAction.CREATE
-            await self._announce_room_placement(participant, result, created)
+            await self._announce_room_placement(participant, result)
         elif isinstance(result, RoomPlacementRejected):
             await self._send_message(participant, RoomRejected(reason=result.reason))
 
-    async def _announce_room_placement(self, participant, placement, created):
-        if created:
-            await self._send_message(participant, RoomCreated(room_id=placement.room_id))
+    async def _announce_room_placement(self, participant, placement):
         await self._send_room_placement(participant, placement)
         logger.info(
             "placed in room: connection_id=%s username=%s room_id=%s role=%s",

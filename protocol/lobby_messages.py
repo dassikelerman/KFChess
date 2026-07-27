@@ -38,11 +38,6 @@ class RoomIntent:
 
 
 @dataclass(frozen=True)
-class RoomCreated:
-    room_id: str
-
-
-@dataclass(frozen=True)
 class RoomRejected:
     reason: str
 
@@ -97,14 +92,6 @@ def _room_intent_kwargs(data):
     return dict(action=action, room_id=None)
 
 
-def _room_created_fields(message):
-    return {"room_id": message.room_id}
-
-
-def _room_created_kwargs(data):
-    return dict(room_id=data["room_id"])
-
-
 def _room_rejected_fields(message):
     return {"reason": message.reason}
 
@@ -133,7 +120,6 @@ register(MessageType.LOGIN, Login, _login_fields, _login_kwargs)
 register(MessageType.LOGGED_IN, LoggedIn, _logged_in_fields, _logged_in_kwargs)
 register(MessageType.PLAY_INTENT, PlayIntent, _play_intent_fields, _play_intent_kwargs)
 register(MessageType.ROOM_INTENT, RoomIntent, _room_intent_fields, _room_intent_kwargs)
-register(MessageType.ROOM_CREATED, RoomCreated, _room_created_fields, _room_created_kwargs)
 register(MessageType.ROOM_REJECTED, RoomRejected, _room_rejected_fields, _room_rejected_kwargs)
 register(MessageType.MATCH_NOT_FOUND, MatchNotFound, _match_not_found_fields, _match_not_found_kwargs)
 register(MessageType.ROLE_ASSIGNED, RoleAssigned, _role_assigned_fields, _role_assigned_kwargs)

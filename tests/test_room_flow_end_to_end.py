@@ -79,10 +79,9 @@ def test_login_create_room_join_room_and_a_move_is_visible_to_both(tmp_path, mon
             assert logged_in_a["rating"] == 1200
 
             await client_a.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
-            room_created = await _expect(client_a, "RoomCreated")
-            room_id = room_created["room_id"]
             role_a = await _expect(client_a, "RoleAssigned")
             assert role_a["role"] == "white"
+            room_id = role_a["room_id"]
             snapshot_a = await _expect(client_a, "GameSnapshot")
 
             client_b = await _connect(uri)

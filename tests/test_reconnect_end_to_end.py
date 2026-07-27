@@ -60,11 +60,10 @@ def test_reconnecting_with_the_same_username_within_the_grace_window_rejoins_the
             await _login(client_b, "bob")
 
             await client_a.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
-            room_created = await _expect(client_a, "RoomCreated")
-            await _expect(client_a, "RoleAssigned")
+            role_a = await _expect(client_a, "RoleAssigned")
             await _expect(client_a, "GameSnapshot")
 
-            room_id = room_created["room_id"]
+            room_id = role_a["room_id"]
             await client_b.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
             await _expect(client_b, "RoleAssigned")
             await _expect(client_b, "GameSnapshot")

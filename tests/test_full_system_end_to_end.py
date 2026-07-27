@@ -58,10 +58,9 @@ def _piece_at(snapshot_payload, row, col):
 
 async def _create_private_room(connection):
     await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
-    room_created = await _expect(connection, "RoomCreated")
-    await _expect(connection, "RoleAssigned")
+    role_assigned = await _expect(connection, "RoleAssigned")
     snapshot = await _expect(connection, "GameSnapshot")
-    return room_created["room_id"], snapshot
+    return role_assigned["room_id"], snapshot
 
 
 async def _join_private_room(connection, room_id):

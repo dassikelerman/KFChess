@@ -24,7 +24,7 @@ import cv2
 import constants
 from client.lobby_view import LobbyView, WINDOW_NAME
 from client.server_connection import ConnectionClosed, EventReceived, ServerConnection, SnapshotReceived
-from protocol.lobby_messages import LoggedIn, MatchNotFound, RoleAssigned, RoomCreated, RoomRejected
+from protocol.lobby_messages import LoggedIn, MatchNotFound, RoleAssigned, RoomRejected
 
 logger = logging.getLogger(__name__)
 
@@ -74,10 +74,7 @@ def run_lobby(connection):
             view.render()
 
             for item in _drain(connection):
-                if isinstance(item, EventReceived) and isinstance(item.event, RoomCreated):
-                    room_id = item.event.room_id
-                    logger.info("room created: room_id=%s", room_id)
-                elif isinstance(item, EventReceived) and isinstance(item.event, RoomRejected):
+                if isinstance(item, EventReceived) and isinstance(item.event, RoomRejected):
                     logger.info("room join rejected: reason=%s", item.event.reason)
                     _show_room_rejected(item.event.reason)
                 elif isinstance(item, EventReceived) and isinstance(item.event, MatchNotFound):
@@ -86,6 +83,7 @@ def run_lobby(connection):
                     _show_match_not_found(item.event.reason)
                 elif isinstance(item, EventReceived) and isinstance(item.event, RoleAssigned):
                     role = item.event.role
+                    room_id = item.event.room_id
                 elif isinstance(item, SnapshotReceived):
                     logger.info("placed in room: room_id=%s role=%s", room_id, role)
                     return room_id, role, item.game_snapshot, item.clock_ms

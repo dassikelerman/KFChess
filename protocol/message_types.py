@@ -18,7 +18,6 @@ class MessageType(StrEnum):
     LOGGED_IN = "LoggedIn"
     PLAY_INTENT = "PlayIntent"
     ROOM_INTENT = "RoomIntent"
-    ROOM_CREATED = "RoomCreated"
     ROOM_REJECTED = "RoomRejected"
     MATCH_NOT_FOUND = "MatchNotFound"
     ROLE_ASSIGNED = "RoleAssigned"

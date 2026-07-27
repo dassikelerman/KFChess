@@ -24,7 +24,6 @@ from protocol.lobby_messages import (
     MatchNotFound,
     PlayIntent,
     RoleAssigned,
-    RoomCreated,
     RoomIntent,
     RoomRejected,
 )
@@ -96,7 +95,6 @@ SAMPLES = [
     PlayIntent(),
     RoomIntent(action=RoomAction.CREATE),
     RoomIntent(action=RoomAction.JOIN, room_id="room-1"),
-    RoomCreated(room_id="room-1"),
     RoomRejected(reason="room_full"),
     MatchNotFound(),
     MatchNotFound(reason="opponent_declined"),

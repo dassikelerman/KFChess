@@ -174,7 +174,7 @@ def _make_real_lifecycle(user_store, rating_store):
     return lifecycle, game_room_registry, disconnect_calls
 
 
-def test_create_room_sequence_receives_room_created_then_role_then_snapshot_in_order(tmp_path):
+def test_create_room_sequence_receives_role_then_snapshot_in_order(tmp_path):
     async def scenario():
         user_store, rating_store = _make_stores(tmp_path)
         lifecycle, _, _ = _make_real_lifecycle(user_store, rating_store)
@@ -186,8 +186,10 @@ def test_create_room_sequence_receives_room_created_then_role_then_snapshot_in_o
         await lifecycle.run(connection)
 
         sent_types = [json.loads(payload)["type"] for payload in connection.sent]
-        assert sent_types == ["LoggedIn", "RoomCreated", "RoleAssigned", "GameSnapshot"]
-        assert json.loads(connection.sent[2])["role"] == "white"
+        assert sent_types == ["LoggedIn", "RoleAssigned", "GameSnapshot"]
+        role_payload = json.loads(connection.sent[1])
+        assert role_payload["role"] == "white"
+        assert role_payload["room_id"]
 
     asyncio.run(scenario())
 
