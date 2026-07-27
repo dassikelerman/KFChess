@@ -32,7 +32,7 @@ class RoomPlacement:
     role: str
 
 
-def room_placement_payloads(placement):
+def build_room_placement_payloads(placement):
     role_payload = message_to_payload(RoleAssigned(role=placement.role, room_id=placement.room_id))
     snapshot = placement.session.components.engine.snapshot()
     clock_ms = placement.session.components.engine.clock
@@ -150,7 +150,7 @@ class GameRoomRegistry:
         return role
 
     def _send_room_placement(self, connection, placement):
-        role_payload, snapshot_payload = room_placement_payloads(placement)
+        role_payload, snapshot_payload = build_room_placement_payloads(placement)
         self._send_fn(connection, role_payload)
         self._send_fn(connection, snapshot_payload)
 

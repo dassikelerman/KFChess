@@ -20,7 +20,7 @@ from protocol.lobby_messages import LoggedIn, Login, RoomRejected
 from protocol.registry import decode_json_message, encode_json_message
 from server.client_message_router import MessageRejected, RoomPlacementRejected
 from server.contracts import Participant, ParticipantState
-from server.rooms import RoomPlacement, room_placement_payloads
+from server.rooms import RoomPlacement, build_room_placement_payloads
 from server.user_store import LoginResult
 
 logger = logging.getLogger(__name__)
@@ -163,7 +163,7 @@ class ConnectionLifecycle:
         )
 
     async def _send_room_placement(self, participant, placement):
-        role_payload, snapshot_payload = room_placement_payloads(placement)
+        role_payload, snapshot_payload = build_room_placement_payloads(placement)
         await participant.connection.send(json.dumps(role_payload))
         await participant.connection.send(json.dumps(snapshot_payload))
 
