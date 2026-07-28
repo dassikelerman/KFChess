@@ -1,3 +1,5 @@
+<div dir="rtl">
+
 # תכנון שרת KFCHESS לקנה מידה עולמי — ממבנה נוכחי לארכיטקטורה מבוזרת
 
 היום מדובר בתהליך שרת אחד (`python -m server.ws_server`) שמחזיק את המנוע
@@ -52,6 +54,71 @@ Shards / Observability, על Redis, PostgreSQL, Docker Compose ו-Kubernetes)
   קוסמטי אלא הדרך היחידה לאמת בפועל את ההנחות המסומנות בהמשך המסמך.
 - **EventBus (`EventDispatcher`)** — נשאר **מקומי** לחדר, בדיוק כפי שהוא
   היום; רק אירוע עסקי חוצה-שירות עובר דרך מתווך רשת.
+
+---
+
+## תרשים ארכיטקטורה
+
+התרשים הבא מציג את אותם רכיבים מהמילון, ואיך הם מתחברים: קו רציף הוא נתיב
+בקשה/נתונים בפועל (למשל חיבור WebSocket חי, או כתיבה ל-PostgreSQL); קו
+מקווקו הוא נתיב בקרה/הקצאה (מי מחליט מה, לא תעבורת משחק בזמן אמת) —
+בדיוק ההבחנה שעומדת מאחורי "EventDispatcher נשאר מקומי, רק אירוע עסקי
+עובר דרך NATS".
+
+```mermaid
+flowchart TB
+    Client(["Client"])
+
+    subgraph GW["Gateways"]
+        APIGW["API Gateway<br/>REST: auth, rooms, history, play request"]
+        WSGW["WS Gateway<br/>live connection: commands, snapshots and deltas"]
+    end
+
+    Auth["Auth Service"]
+    MM["Matchmaker"]
+    GA["Game Allocator"]
+
+    subgraph Shared["Shared State"]
+        Dir[("Room Directory<br/>Redis: room_id maps to game_server_id")]
+        Q[("Matchmaking Queue<br/>Redis")]
+        PG[("PostgreSQL<br/>accounts, ratings, history")]
+    end
+
+    subgraph Shards["Game Server Shards (Kubernetes)"]
+        GS1["Game Server Shard #1<br/>GameSession + GameEngine"]
+        GS2["Game Server Shard #2"]
+        GSN["Game Server Shard #N"]
+    end
+
+    Bus{{"NATS<br/>cross-service events"}}
+
+    Client -->|REST| APIGW
+    Client <-->|WebSocket| WSGW
+
+    APIGW --> Auth
+    Auth --> PG
+    APIGW -->|PlayIntent| MM
+
+    WSGW -->|commands, snapshots and deltas| GS1
+    WSGW -.->|lookup room_id| Dir
+
+    MM --> Q
+    MM -->|MatchFound| GA
+    GA -->|register room| Dir
+    GA -.->|assign| GS2
+
+    GS1 --> PG
+    GS2 --> PG
+    GSN --> PG
+
+    MM -.->|control| Bus
+    GA -.->|control| Bus
+    GS1 -.->|control| Bus
+```
+
+כל `Game Server Shard` הוא תהליך יחיד שמארח הרבה חדרים בבת אחת (ראו פרק
+Docker) — התרשים מצייר שלושה כדי להראות שהם עותקים מאוזני-עומס, לא כדי
+לרמוז על מספר קבוע.
 
 ---
 
@@ -360,3 +427,5 @@ Docker Compose כגרסת פיתוח מצומצמת; מבני הזיכרון ה�
 
 > **עיקרון מרכזי:** `EventDispatcher` נשאר מקומי לחדר בדיוק כפי שהוא היום;
 > רק מה שחוצה גבול שירות עובר דרך מתווך רשת.
+
+</div>
