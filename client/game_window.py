@@ -10,17 +10,26 @@ GameWindow is the one you see once you're in it.
 
 import logging
 import queue
+import tkinter as tk
 import winsound
+from tkinter import messagebox
 
 import cv2
 
 import constants
-from client.server_connection import EventReceived, SnapshotReceived
+from client.server_connection import ConnectionClosed, EventReceived, SnapshotReceived
 from events.game_events import GameOverEvent, PlayerDisconnectedEvent, PlayerReconnectedEvent
 from view.game_ui_snapshot import build_ui_snapshot
 from view.theme import DISCONNECT_WARNING_COLOR_BGR, HUD_TEXT_FONT_SIZE, HUD_TEXT_THICKNESS, ROOM_LABEL_COLOR_BGR
 
 logger = logging.getLogger(__name__)
+
+
+def _show_connection_lost(reason):
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showerror("Connection lost", reason or "The connection to the server was lost.")
+    root.destroy()
 
 
 class SnapshotView:
@@ -61,6 +70,7 @@ class GameWindow:
     def __init__(
         self, connection, snapshot_view, dispatcher, score_tracker, action_history,
         sound_system, sound_paths, view, controller, room_id=None,
+        notify_connection_lost=_show_connection_lost,
     ):
         self._connection = connection
         self._snapshot_view = snapshot_view
@@ -72,7 +82,9 @@ class GameWindow:
         self._view = view
         self._controller = controller
         self._room_id = room_id
+        self._notify_connection_lost = notify_connection_lost
         self._disconnect_warning = None
+        self._connection_lost_reason = None
         self._dispatcher.subscribe(PlayerDisconnectedEvent, self._on_player_disconnected)
         self._dispatcher.subscribe(PlayerReconnectedEvent, self._on_player_reconnected)
         self._dispatcher.subscribe(GameOverEvent, self._on_game_over)
@@ -85,6 +97,8 @@ class GameWindow:
 
         while True:
             self._drain_inbound()
+            if self._connection_lost_reason is not None:
+                break
             self._controller.refresh_selection()
 
             for filename in self._sound_system.drain_pending():
@@ -116,6 +130,8 @@ class GameWindow:
                 break
 
         cv2.destroyAllWindows()
+        if self._connection_lost_reason is not None:
+            self._notify_connection_lost(self._connection_lost_reason)
 
     def _drain_inbound(self):
         while True:
@@ -128,6 +144,10 @@ class GameWindow:
                 self._snapshot_view.update(item.game_snapshot, item.clock_ms)
             elif isinstance(item, EventReceived):
                 self._dispatcher.publish(item.event)
+            elif isinstance(item, ConnectionClosed):
+                logger.warning("connection closed during an active game: reason=%r", item.reason)
+                self._connection_lost_reason = item.reason or "The connection to the server was lost."
+                return
 
     def _on_player_disconnected(self, event):
         if self._disconnect_warning is None:  # log only the transition, not every tick

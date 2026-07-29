@@ -307,6 +307,82 @@ def test_room_closes_itself_a_grace_period_after_the_game_ends():
     asyncio.run(scenario())
 
 
+def test_close_room_resets_still_connected_participants_back_to_the_lobby():
+    async def scenario():
+        registry = GameRoomRegistry(
+            lambda connection, payload: None, RatingStore(), room_close_grace_seconds=1,
+        )
+        white_participant = _make_participant("white")
+        black_participant = _make_participant("black")
+        placement = registry.create_private_room(white_participant)
+        registry.join_private_room(black_participant, placement.room_id)
+
+        placement.session.components.engine.resign(PieceColor.WHITE)
+        registry.tick(1100)  # past the 1s grace period
+
+        assert placement.room_id not in registry._sessions_by_room_id
+        for participant in (white_participant, black_participant):
+            assert participant.state is ParticipantState.LOBBY
+            assert participant.room_id is None
+            assert participant.role is None
+
+    asyncio.run(scenario())
+
+
+def test_close_room_does_not_touch_a_participant_that_already_disconnected():
+    async def scenario():
+        registry = GameRoomRegistry(
+            lambda connection, payload: None, RatingStore(), room_close_grace_seconds=1,
+        )
+        white_participant = _make_participant("white")
+        black_participant = _make_participant("black")
+        placement = registry.create_private_room(white_participant)
+        registry.join_private_room(black_participant, placement.room_id)
+
+        await registry.remove_participant(white_participant)  # drops mid-game, before it ends
+        room_id_seen_by_white_before_close = white_participant.room_id
+
+        placement.session.components.engine.resign(PieceColor.WHITE)  # black wins
+        registry.tick(1100)
+
+        assert placement.room_id not in registry._sessions_by_room_id
+        assert black_participant.state is ParticipantState.LOBBY
+        assert black_participant.room_id is None
+        assert black_participant.role is None
+        # white already left before the room closed - _close_room must not reach for it
+        assert white_participant.room_id == room_id_seen_by_white_before_close
+
+    asyncio.run(scenario())
+
+
+def test_close_room_resets_a_reconnected_participant_not_the_stale_pre_reconnect_one():
+    async def scenario():
+        registry = GameRoomRegistry(
+            lambda connection, payload: None, RatingStore(), room_close_grace_seconds=1,
+        )
+        white_participant = Participant(connection="conn-white", username="alice")
+        black_participant = Participant(connection="conn-black", username="bob")
+        placement = registry.create_private_room(white_participant)
+        registry.join_private_room(black_participant, placement.room_id)
+
+        await registry.remove_participant(white_participant)  # alice drops, countdown starts
+        reconnected = Participant(connection="conn-white-new", username="alice")
+        assert registry.try_reconnect(reconnected) is not None
+
+        placement.session.components.engine.resign(PieceColor.BLACK)  # alice (white) wins
+        registry.tick(1100)
+
+        assert placement.room_id not in registry._sessions_by_room_id
+        assert reconnected.state is ParticipantState.LOBBY
+        assert reconnected.room_id is None
+        assert reconnected.role is None
+        assert black_participant.state is ParticipantState.LOBBY
+        # the stale pre-reconnect participant object was never re-touched by the close
+        assert white_participant.role == "white"
+
+    asyncio.run(scenario())
+
+
 def test_room_stays_open_while_the_game_is_still_in_progress():
     async def scenario():
         registry, sent = _make_registry()

@@ -4,9 +4,11 @@ Owns the room id -> GameSession mapping. Builds each GameSession fully wired (it
 NetworkPublisher is constructor-injected, never assigned afterward) and tears a room
 down once its last connection leaves, or once its game has been over for
 ROOM_CLOSE_GRACE_SECONDS - whichever happens first, so a room doesn't sit in memory
-forever just because a client never closes its socket after GameOverEvent. It does not
-decode wire messages or validate a participant's state - ClientMessageRouter does that
-before ever calling in here.
+forever just because a client never closes its socket after GameOverEvent. Whichever
+still-connected participants that leaves behind are reset back to the lobby (state,
+room_id, role all cleared) so the same connection can immediately queue or open another
+room. It does not decode wire messages or validate a participant's state -
+ClientMessageRouter does that before ever calling in here.
 
 tick(dt_ms) advances every active room from the one server loop (see server/ws_server.py)
 instead of each room running its own asyncio task - a room failing mid-tick is logged and
@@ -55,6 +57,7 @@ class GameRoomRegistry:
         self._room_close_grace_ms = room_close_grace_seconds * 1000
         self._sessions_by_room_id = {}
         self._connections_by_room_id = {}
+        self._participants_by_room_id = {}
         self._closing_after_ms = {}
 
     def create_private_room(self, participant):
@@ -87,6 +90,7 @@ class GameRoomRegistry:
             if role is None:
                 continue
             self._connections_by_room_id[room_id].add(participant.connection)
+            self._replace_participant_in_room(room_id, participant)
             participant.role = role
             participant.room_id = room_id
             participant.state = ParticipantState.IN_ROOM
@@ -100,6 +104,7 @@ class GameRoomRegistry:
             return False
 
         connections.discard(participant.connection)
+        self._participants_by_room_id.get(room_id, {}).pop(participant.connection, None)
         if connections:
             session = self._sessions_by_room_id.get(room_id)
             if session is not None:
@@ -140,6 +145,7 @@ class GameRoomRegistry:
     def _open_room(self):
         room_id = self._generate_unique_room_id()
         self._connections_by_room_id[room_id] = set()
+        self._participants_by_room_id[room_id] = {}
 
         session = GameSession(
             constants.STANDARD_START_BOARD,
@@ -160,10 +166,22 @@ class GameRoomRegistry:
         role = session.assign_role(participant.connection)
         session.record_login(participant.connection, participant.username)
         self._connections_by_room_id[room_id].add(participant.connection)
+        self._participants_by_room_id[room_id][participant.connection] = participant
         participant.role = role
         participant.room_id = room_id
         participant.state = ParticipantState.IN_ROOM
         return role
+
+    def _replace_participant_in_room(self, room_id, participant):
+        # A reconnect swaps in a brand-new Participant/connection for the same seat -
+        # drop the stale (now-dead) connection's entry so _close_room resets the live one.
+        participants = self._participants_by_room_id[room_id]
+        stale_connection = next(
+            (connection for connection, other in participants.items() if other.username == participant.username),
+            None,
+        )
+        participants.pop(stale_connection, None)
+        participants[participant.connection] = participant
 
     def _send_room_placement(self, connection, placement):
         role_payload, snapshot_payload = build_room_placement_payloads(placement)
@@ -189,6 +207,10 @@ class GameRoomRegistry:
         self._broadcast_to_room(room_id, snapshot_to_payload(snapshot, clock_ms))
 
     def _close_room(self, room_id):
+        for participant in self._participants_by_room_id.pop(room_id, {}).values():
+            participant.state = ParticipantState.LOBBY
+            participant.room_id = None
+            participant.role = None
         self._connections_by_room_id.pop(room_id, None)
         self._sessions_by_room_id.pop(room_id, None)
         self._closing_after_ms.pop(room_id, None)

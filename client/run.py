@@ -75,7 +75,11 @@ def main():
         print("usage: python -m client.run <ws_url>")
         sys.exit(1)
     configure_logging(constants.CLIENT_LOG_PATH)
-    run(sys.argv[1])
+    try:
+        run(sys.argv[1])
+    except ConnectionError as error:
+        print(f"Disconnected from server: {error}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
