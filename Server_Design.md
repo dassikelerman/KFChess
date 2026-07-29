@@ -75,7 +75,7 @@ flowchart TB
     LB["Load Balancer<br/>TLS termination"]
 
     subgraph GW["Gateways"]
-        APIGW["API Gateway<br/>REST: auth, rooms, history, play request"]
+        APIGW["API Gateway<br/>REST: auth, rooms, history"]
         WSGW["WS Gateway<br/>live connection: commands, snapshots"]
     end
 
@@ -374,6 +374,16 @@ Server Shard**. הראשון קורה פעם אחת בפתיחת החיבור; �
 ההתחברות כהודעה ראשונה על אותו חיבור שממשיך לשאת גם את המשחק. **WS
 Gateway** מחזיק את החיבור החי, לאחר האימות, ומנתב אותו ל-Game Server
 הנכון. שני דברים שהפיצול הזה חייב להתמודד איתם:
+
+**מצב היישום היום — פיצול פנים-תהליכי, לא עדיין שני שירותים.** `AuthGateway`
+(`server/api_gateway/auth.py`) ו-`ConnectionHandler`
+(`server/ws_gateway/connection_handler.py`) הן שתי מחלקות Python נפרדות,
+אבל שתיהן רצות היום בתוך אותו תהליך `ws_server.main()` בדיוק כמו כל שאר
+המערכת — אין ביניהן שום קריאת רשת, פורט, או `listen` נפרד; `ConnectionLifecycle`
+פשוט קורא לשתיהן כקריאת פונקציה ישירה, ברצף, על אותו חיבור WebSocket. זה
+עקבי עם איך ש-Redis Room Directory (שלב 2) יושם: הגבול הלוגי בין הרכיבים
+כבר קיים, אבל הפיכתו לגבול-רשת אמיתי בין שני תהליכים נפרדים מחכה ל-Load
+Balancer (שלב 4) ולריצה בפועל תחת Docker Compose/Kubernetes (שלבים 6–7).
 
 - **עלות אימות:** `UserStore` מבצע 200,000 איטרציות PBKDF2 סינכרוניות לכל
   התחברות — עלות CPU ממשית שתכנון קיבולת ה-API Gateway חייב לכלול, לא רק
