@@ -25,5 +25,21 @@ services:
       timeout: 3s
       retries: 10
 
+  tls_proxy:
+    image: caddy:2-alpine
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - kfchess-caddy-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:2019/config/"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
 volumes:
   kfchess-postgres-data:
+  kfchess-caddy-data:

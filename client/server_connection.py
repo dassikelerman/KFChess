@@ -13,7 +13,9 @@ internals directly - the two queues are the only handoff.
 import asyncio
 import json
 import logging
+import os
 import queue
+import ssl
 import threading
 from dataclasses import dataclass
 
@@ -48,6 +50,21 @@ class ConnectionClosed:
 # Queue.get(), which is not a daemon thread - without an explicit item to wake it,
 # it blocks forever and the process can never exit. This sentinel is that item.
 _CLOSE_SENTINEL = object()
+
+
+def _dev_insecure_ssl_context(url):
+    """Relax certificate verification for wss://, but only under an explicit dev
+    opt-in - never by default. The local Caddy TLS-terminating proxy (see
+    Server_Design.md's Load Balancer section) uses "tls internal", a cert signed
+    by a local, non-public CA that the default context would reject outright. A
+    real deployment's wss:// gets a real cert, so it must keep full verification -
+    hence gating this on an env var instead of just detecting the wss:// scheme."""
+    if not url.startswith("wss://") or os.environ.get("KFCHESS_DEV_INSECURE_TLS") != "1":
+        return None
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
 
 
 class ServerConnection:
@@ -94,7 +111,7 @@ class ServerConnection:
     async def _connect_and_pump(self):
         logger.info("connecting to %s", self._url)
         try:
-            async with websockets.connect(self._url) as connection:
+            async with websockets.connect(self._url, ssl=_dev_insecure_ssl_context(self._url)) as connection:
                 await self._run_receive_and_send(connection)
         except websockets.ConnectionClosed as e:
             reason = e.rcvd.reason if e.rcvd is not None else ""

@@ -58,8 +58,9 @@ Accounts and ratings live in PostgreSQL (`server/user_store.py`,
 `server/rating.py`), not a local file. Room/user/join-code routing metadata
 lives in Redis (`server/room_directory.py`) - never the live game state
 itself, which stays in process memory (see Server_Design.md's Redis
-section). Start both with Docker before running the server or the test
-suite:
+section). `docker compose up -d` also brings up a local Caddy container
+that terminates TLS in front of the server (see "TLS" below). Start all
+three before running the server or the test suite:
 
 ```
 docker compose up -d
@@ -71,12 +72,31 @@ This matches the connection strings both default to
 and `KFCHESS_REDIS_URL` environment variables if you're pointing at
 different instances.
 
+## TLS
+
+`ws_server` itself still only speaks plain `ws://` - the `tls_proxy`
+service in `docker-compose.yml` (Caddy) is what terminates TLS, on
+`wss://localhost:8443`, proxying through to the server on the host. It
+uses Caddy's own local, non-public CA (`tls internal`), so a client
+connecting through it must opt in to trusting that dev-only cert
+explicitly via `KFCHESS_DEV_INSECURE_TLS=1` - see Server_Design.md's Load
+Balancer section for why this doesn't relax anything for a real deployment
+with a real certificate.
+
+**Known caveat:** if your Python install has `pip_system_certs` (or
+anything else that globally replaces `ssl.SSLContext`, e.g. via a `.pth`
+file) active, it re-verifies every TLS connection against the OS trust
+store regardless of `verify_mode`/`check_hostname`, which defeats
+`KFCHESS_DEV_INSECURE_TLS` - the fix on such a machine is to trust Caddy's
+local CA in the OS trust store directly, not a code change here.
+
 ## Running
 
 ```
-python -m server.ws_server              # start the server (ws://localhost:8765)
-python -m client.run ws://localhost:8765  # start a client
-python -m view.run                        # local, no-network single-process game
+python -m server.ws_server                                            # start the server (ws://localhost:8765)
+python -m client.run ws://localhost:8765                              # direct client, bypassing the proxy
+KFCHESS_DEV_INSECURE_TLS=1 python -m client.run wss://localhost:8443   # client via the local TLS proxy
+python -m view.run                                                    # local, no-network single-process game
 ```
 
 ## Running tests

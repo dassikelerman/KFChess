@@ -94,7 +94,7 @@ def test_a_rejected_login_reports_closed_on_the_inbound_queue(monkeypatch):
         async def __aexit__(self, *args):
             return False
 
-    monkeypatch.setattr(websockets, "connect", lambda url: FakeConnection())
+    monkeypatch.setattr(websockets, "connect", lambda url, **kwargs: FakeConnection())
 
     asyncio.run(client._connect_and_pump())
 

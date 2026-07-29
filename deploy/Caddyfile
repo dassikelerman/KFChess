@@ -1,0 +1,7 @@
+:8443 {
+	# tls internal: Caddy's own local CA, not a public one - see the
+	# "Load Balancer" section of Server_Design.md for why the dev client
+	# has to opt in to trusting it explicitly (KFCHESS_DEV_INSECURE_TLS).
+	tls internal
+	reverse_proxy host.docker.internal:8765
+}
