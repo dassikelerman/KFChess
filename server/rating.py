@@ -54,7 +54,20 @@ class RatingStore:
         new_white = round(white_rating + constants.RATING_K_FACTOR * (white_score - white_expected))
         new_black = round(black_rating + constants.RATING_K_FACTOR * (black_score - black_expected))
 
-        with self._connection.cursor() as cursor:
-            cursor.execute("UPDATE users SET rating = %s WHERE username = %s", (new_white, white_username))
-            cursor.execute("UPDATE users SET rating = %s WHERE username = %s", (new_black, black_username))
+        # Both rows must land together or not at all - the one place here where two
+        # statements need real transactional atomicity, not autocommit's one-statement-
+        # at-a-time default. Restoring autocommit in `finally` keeps every other method
+        # (get_rating, create_or_verify) safe from ever sitting idle-in-transaction.
+        self._connection.autocommit = False
+        try:
+            with self._connection.cursor() as cursor:
+                cursor.execute("UPDATE users SET rating = %s WHERE username = %s", (new_white, white_username))
+                cursor.execute("UPDATE users SET rating = %s WHERE username = %s", (new_black, black_username))
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            raise
+        finally:
+            self._connection.autocommit = True
+
         return new_white, new_black
