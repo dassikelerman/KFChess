@@ -15,7 +15,7 @@ dependencies = []
 # deployment has no reason to pull in opencv-python (a GUI/image library) -
 # only the client renders anything.
 client = ["opencv-python", "websockets"]
-server = ["websockets"]
+server = ["websockets", "psycopg2-binary"]
 dev = ["pytest", "pytest-cov"]
 
 [tool.setuptools]

@@ -11,6 +11,7 @@ from protocol.registry import message_to_payload
 from model.position import Position
 from server.rating import RatingStore
 from server.user_store import UserStore
+from tests.db_helpers import reset_users_table
 
 RECV_TIMEOUT_S = 5
 MOVE_LANDING_TIMEOUT_S = 8
@@ -60,11 +61,11 @@ def _piece_at(snapshot_payload, row, col):
     return None
 
 
-def test_login_create_room_join_room_and_a_move_is_visible_to_both(tmp_path, monkeypatch):
+def test_login_create_room_join_room_and_a_move_is_visible_to_both(monkeypatch):
     monkeypatch.setattr(ws_server, "PORT", TEST_PORT)
-    db_path = str(tmp_path / "test_users.db")
-    monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore(db_path))
-    monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore(db_path))
+    reset_users_table()
+    monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore())
+    monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore())
 
     async def scenario():
         server_task = asyncio.create_task(ws_server.main())

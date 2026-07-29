@@ -1,21 +1,23 @@
+from tests.db_helpers import reset_users_table
+
 from server.rating import RatingStore
 from server.user_store import UserStore
 
 
-def _make_stores(tmp_path):
-    db_path = str(tmp_path / "test_users.db")
-    return UserStore(db_path), RatingStore(db_path)
+def _make_stores():
+    reset_users_table()
+    return UserStore(), RatingStore()
 
 
-def test_a_new_user_starts_at_the_default_rating(tmp_path):
-    user_store, rating_store = _make_stores(tmp_path)
+def test_a_new_user_starts_at_the_default_rating():
+    user_store, rating_store = _make_stores()
     user_store.create_or_verify("alice", "hunter2")
 
     assert rating_store.get_rating("alice") == 1200
 
 
-def test_update_ratings_for_equal_ratings_and_a_white_win(tmp_path):
-    user_store, rating_store = _make_stores(tmp_path)
+def test_update_ratings_for_equal_ratings_and_a_white_win():
+    user_store, rating_store = _make_stores()
     user_store.create_or_verify("alice", "pw")
     user_store.create_or_verify("bob", "pw")
 
@@ -28,8 +30,8 @@ def test_update_ratings_for_equal_ratings_and_a_white_win(tmp_path):
     assert rating_store.get_rating("bob") == 1184
 
 
-def test_update_ratings_for_equal_ratings_and_a_draw(tmp_path):
-    user_store, rating_store = _make_stores(tmp_path)
+def test_update_ratings_for_equal_ratings_and_a_draw():
+    user_store, rating_store = _make_stores()
     user_store.create_or_verify("alice", "pw")
     user_store.create_or_verify("bob", "pw")
 
@@ -39,15 +41,16 @@ def test_update_ratings_for_equal_ratings_and_a_draw(tmp_path):
     assert (new_white, new_black) == (1200, 1200)
 
 
-def test_update_ratings_for_an_unequal_upset_favors_the_underdog(tmp_path):
-    user_store, rating_store = _make_stores(tmp_path)
+def test_update_ratings_for_an_unequal_upset_favors_the_underdog():
+    user_store, rating_store = _make_stores()
     user_store.create_or_verify("alice", "pw")
     user_store.create_or_verify("bob", "pw")
     # Seed an unequal starting point directly, rather than getting there
     # via prior game results - keeps this test's expected values a
     # direct, independent hand-computation from a known starting rating.
-    rating_store._connection.execute("UPDATE users SET rating = ? WHERE username = ?", (1400, "alice"))
-    rating_store._connection.execute("UPDATE users SET rating = ? WHERE username = ?", (1000, "bob"))
+    with rating_store._connection.cursor() as cursor:
+        cursor.execute("UPDATE users SET rating = %s WHERE username = %s", (1400, "alice"))
+        cursor.execute("UPDATE users SET rating = %s WHERE username = %s", (1000, "bob"))
     rating_store._connection.commit()
 
     new_white, new_black = rating_store.update_ratings("alice", "bob", "black")

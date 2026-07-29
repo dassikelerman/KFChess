@@ -1,7 +1,7 @@
-import sqlite3
+import psycopg2
 
 import constants
-from server.user_store import DEFAULT_DB_PATH
+from server.user_store import DEFAULT_DATABASE_URL
 
 
 def _expected_score(rating, opponent_rating):
@@ -19,24 +19,28 @@ def _actual_scores(winner_color):
 
 
 class RatingStore:
-    def __init__(self, db_path=DEFAULT_DB_PATH):
-        self._connection = sqlite3.connect(db_path)
-        self._connection.execute(
-            f"""
-            CREATE TABLE IF NOT EXISTS users (
-                username TEXT PRIMARY KEY,
-                password_hash TEXT NOT NULL,
-                password_salt TEXT NOT NULL,
-                rating INTEGER DEFAULT {constants.STARTING_RATING}
+    def __init__(self, database_url=DEFAULT_DATABASE_URL):
+        # autocommit - see the matching comment in UserStore.__init__: without it, a
+        # read-only get_rating() would leave an idle-in-transaction connection that could
+        # later block a DROP TABLE from some other, unrelated connection.
+        self._connection = psycopg2.connect(database_url)
+        self._connection.autocommit = True
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                CREATE TABLE IF NOT EXISTS users (
+                    username TEXT PRIMARY KEY,
+                    password_hash TEXT NOT NULL,
+                    password_salt TEXT NOT NULL,
+                    rating INTEGER DEFAULT {constants.STARTING_RATING}
+                )
+                """
             )
-            """
-        )
-        self._connection.commit()
 
     def get_rating(self, username):
-        row = self._connection.execute(
-            "SELECT rating FROM users WHERE username = ?", (username,),
-        ).fetchone()
+        with self._connection.cursor() as cursor:
+            cursor.execute("SELECT rating FROM users WHERE username = %s", (username,))
+            row = cursor.fetchone()
         return row[0]
 
     def update_ratings(self, white_username, black_username, winner_color):
@@ -50,7 +54,7 @@ class RatingStore:
         new_white = round(white_rating + constants.RATING_K_FACTOR * (white_score - white_expected))
         new_black = round(black_rating + constants.RATING_K_FACTOR * (black_score - black_expected))
 
-        self._connection.execute("UPDATE users SET rating = ? WHERE username = ?", (new_white, white_username))
-        self._connection.execute("UPDATE users SET rating = ? WHERE username = ?", (new_black, black_username))
-        self._connection.commit()
+        with self._connection.cursor() as cursor:
+            cursor.execute("UPDATE users SET rating = %s WHERE username = %s", (new_white, white_username))
+            cursor.execute("UPDATE users SET rating = %s WHERE username = %s", (new_black, black_username))
         return new_white, new_black

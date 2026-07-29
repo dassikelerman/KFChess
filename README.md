@@ -49,8 +49,23 @@ This is an editable install, so code changes take effect immediately with no
 `sys.path` hacks needed. Install only what you need instead of everything:
 
 - `.[client]` - opencv-python + websockets, for running the GUI client
-- `.[server]` - websockets only (no opencv-python - the server never renders anything)
+- `.[server]` - websockets + psycopg2-binary, for running the server
 - `.[dev]` - pytest + pytest-cov, for running the test suite
+
+## Database
+
+Accounts and ratings live in PostgreSQL (`server/user_store.py`,
+`server/rating.py`), not a local file. Start it with Docker before running
+the server or the test suite:
+
+```
+docker compose up -d
+```
+
+This matches the connection string both stores default to
+(`postgresql://kfchess:kfchess@localhost:5432/kfchess`); override it with
+the `KFCHESS_DATABASE_URL` environment variable if you're pointing at a
+different instance.
 
 ## Running
 
@@ -63,6 +78,7 @@ python -m view.run                        # local, no-network single-process gam
 ## Running tests
 
 ```
+docker compose up -d   # most of the suite needs the real Postgres instance
 pytest
 ```
 

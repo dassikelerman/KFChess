@@ -11,6 +11,7 @@ from protocol.registry import message_to_payload
 from model.position import Position
 from server.rating import RatingStore
 from server.user_store import UserStore
+from tests.db_helpers import reset_users_table
 
 RECV_TIMEOUT_S = 5
 CLIENT_CLOSE_TIMEOUT_S = 2
@@ -99,11 +100,11 @@ async def _send_move_and_wait_for_landing(sender, watcher, source, destination, 
             return data
 
 
-def test_concurrent_private_and_matched_rooms_do_not_leak_snapshots_or_events(tmp_path, monkeypatch):
+def test_concurrent_private_and_matched_rooms_do_not_leak_snapshots_or_events(monkeypatch):
     monkeypatch.setattr(ws_server, "PORT", MULTI_ROOM_PORT)
-    db_path = str(tmp_path / "test_users.db")
-    monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore(db_path))
-    monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore(db_path))
+    reset_users_table()
+    monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore())
+    monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore())
 
     async def scenario():
         server_task = asyncio.create_task(ws_server.main())
@@ -161,11 +162,11 @@ def test_concurrent_private_and_matched_rooms_do_not_leak_snapshots_or_events(tm
     asyncio.run(scenario())
 
 
-def test_a_full_realistic_session_ends_in_disconnect_resign_and_rating_updates(tmp_path, monkeypatch):
+def test_a_full_realistic_session_ends_in_disconnect_resign_and_rating_updates(monkeypatch):
     monkeypatch.setattr(ws_server, "PORT", FULL_SESSION_PORT)
-    db_path = str(tmp_path / "test_users.db")
-    monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore(db_path))
-    monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore(db_path))
+    reset_users_table()
+    monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore())
+    monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore())
     monkeypatch.setattr(ws_server, "DISCONNECT_COUNTDOWN_SECONDS", 1)
 
     async def scenario():
@@ -204,7 +205,7 @@ def test_a_full_realistic_session_ends_in_disconnect_resign_and_rating_updates(t
             except asyncio.CancelledError:
                 pass
 
-        rating_store = RatingStore(db_path)
+        rating_store = RatingStore()
         # Equal starting ratings (1200), black win: white loses, black gains.
         assert rating_store.get_rating("alice") == 1184
         assert rating_store.get_rating("bob") == 1216

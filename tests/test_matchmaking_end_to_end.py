@@ -8,6 +8,7 @@ from protocol.lobby_messages import Login, PlayIntent
 from protocol.registry import message_to_payload
 from server.rating import RatingStore
 from server.user_store import UserStore
+from tests.db_helpers import reset_users_table
 
 RECV_TIMEOUT_S = 5
 CLIENT_CLOSE_TIMEOUT_S = 2
@@ -30,11 +31,11 @@ async def _connect(uri):
     return await websockets.connect(uri, close_timeout=CLIENT_CLOSE_TIMEOUT_S)
 
 
-def test_two_compatible_players_are_matched_and_a_third_incompatible_player_expires(tmp_path, monkeypatch):
+def test_two_compatible_players_are_matched_and_a_third_incompatible_player_expires(monkeypatch):
     monkeypatch.setattr(ws_server, "PORT", TEST_PORT)
-    db_path = str(tmp_path / "test_users.db")
-    shared_user_store = UserStore(db_path)
-    shared_rating_store = RatingStore(db_path)
+    reset_users_table()
+    shared_user_store = UserStore()
+    shared_rating_store = RatingStore()
     monkeypatch.setattr(ws_server, "UserStore", lambda: shared_user_store)
     monkeypatch.setattr(ws_server, "RatingStore", lambda: shared_rating_store)
     # The global server loop already ticks every SERVER_TICK_MS (~16ms) by default -
@@ -44,8 +45,8 @@ def test_two_compatible_players_are_matched_and_a_third_incompatible_player_expi
     # alice and bob keep the default 1200 rating (compatible). carol is bumped
     # far outside the +/-100 tolerance so she stays queued until she expires.
     shared_user_store.create_or_verify("carol", "devpass")
-    shared_rating_store._connection.execute("UPDATE users SET rating = ? WHERE username = ?", (1500, "carol"))
-    shared_rating_store._connection.commit()
+    with shared_rating_store._connection.cursor() as cursor:
+        cursor.execute("UPDATE users SET rating = %s WHERE username = %s", (1500, "carol"))
 
     async def scenario():
         server_task = asyncio.create_task(ws_server.main())

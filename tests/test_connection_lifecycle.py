@@ -13,6 +13,7 @@ from server.rating import RatingStore
 from server.rooms import GameRoomRegistry
 from server.matchmaker import Matchmaker
 from server.user_store import UserStore
+from tests.db_helpers import reset_users_table
 
 
 class FakeConnection:
@@ -57,9 +58,9 @@ def _login_message(username, password="hunter2"):
     return json.dumps(message_to_payload(Login(username=username, password=password)))
 
 
-def _make_stores(tmp_path):
-    db_path = str(tmp_path / "test_users.db")
-    return UserStore(db_path), RatingStore(db_path)
+def _make_stores():
+    reset_users_table()
+    return UserStore(), RatingStore()
 
 
 def _make_lifecycle(user_store, rating_store):
@@ -73,8 +74,8 @@ def _make_lifecycle(user_store, rating_store):
     return lifecycle, disconnect_calls
 
 
-def test_a_successful_login_reaches_lobby_and_receives_logged_in(tmp_path):
-    user_store, rating_store = _make_stores(tmp_path)
+def test_a_successful_login_reaches_lobby_and_receives_logged_in():
+    user_store, rating_store = _make_stores()
     lifecycle, disconnect_calls = _make_lifecycle(user_store, rating_store)
     connection = FakeConnection([_login_message("alice")])
 
@@ -90,8 +91,8 @@ def test_a_successful_login_reaches_lobby_and_receives_logged_in(tmp_path):
     assert participant.state is ParticipantState.DISCONNECTED
 
 
-def test_a_wrong_password_is_rejected_and_closed_without_reaching_the_lobby(tmp_path):
-    user_store, rating_store = _make_stores(tmp_path)
+def test_a_wrong_password_is_rejected_and_closed_without_reaching_the_lobby():
+    user_store, rating_store = _make_stores()
     user_store.create_or_verify("alice", "correct-password")
     lifecycle, disconnect_calls = _make_lifecycle(user_store, rating_store)
     connection = FakeConnection([_login_message("alice", "wrong-password")])
@@ -104,8 +105,8 @@ def test_a_wrong_password_is_rejected_and_closed_without_reaching_the_lobby(tmp_
     assert disconnect_calls[0].authenticated is False
 
 
-def test_a_malformed_login_is_rejected_and_closed_without_reaching_the_lobby(tmp_path):
-    user_store, rating_store = _make_stores(tmp_path)
+def test_a_malformed_login_is_rejected_and_closed_without_reaching_the_lobby():
+    user_store, rating_store = _make_stores()
     lifecycle, disconnect_calls = _make_lifecycle(user_store, rating_store)
     connection = FakeConnection(["not json {"])
 
@@ -117,8 +118,8 @@ def test_a_malformed_login_is_rejected_and_closed_without_reaching_the_lobby(tmp
     assert disconnect_calls[0].authenticated is False
 
 
-def test_the_disconnect_callback_fires_exactly_once_even_when_an_error_occurs_mid_handling(tmp_path):
-    user_store, rating_store = _make_stores(tmp_path)
+def test_the_disconnect_callback_fires_exactly_once_even_when_an_error_occurs_mid_handling():
+    user_store, rating_store = _make_stores()
     lifecycle, disconnect_calls = _make_lifecycle(user_store, rating_store)
     connection = FakeConnection([_login_message("alice")])
     connection.send_should_fail = True
@@ -129,8 +130,8 @@ def test_the_disconnect_callback_fires_exactly_once_even_when_an_error_occurs_mi
     assert len(disconnect_calls) == 1
 
 
-def test_no_password_or_hash_or_salt_ever_appears_in_the_logs(tmp_path, caplog):
-    user_store, rating_store = _make_stores(tmp_path)
+def test_no_password_or_hash_or_salt_ever_appears_in_the_logs(caplog):
+    user_store, rating_store = _make_stores()
     lifecycle, _ = _make_lifecycle(user_store, rating_store)
     connection = FakeConnection([_login_message("alice", "super-secret-password")])
 
@@ -140,8 +141,8 @@ def test_no_password_or_hash_or_salt_ever_appears_in_the_logs(tmp_path, caplog):
     assert "super-secret-password" not in caplog.text
 
 
-def test_no_password_appears_in_the_logs_even_on_a_wrong_password_rejection(tmp_path, caplog):
-    user_store, rating_store = _make_stores(tmp_path)
+def test_no_password_appears_in_the_logs_even_on_a_wrong_password_rejection(caplog):
+    user_store, rating_store = _make_stores()
     user_store.create_or_verify("alice", "correct-password")
     lifecycle, _ = _make_lifecycle(user_store, rating_store)
     connection = FakeConnection([_login_message("alice", "wrong-super-secret-password")])
@@ -174,9 +175,9 @@ def _make_real_lifecycle(user_store, rating_store):
     return lifecycle, game_room_registry, disconnect_calls
 
 
-def test_create_room_sequence_receives_role_then_snapshot_in_order(tmp_path):
+def test_create_room_sequence_receives_role_then_snapshot_in_order():
     async def scenario():
-        user_store, rating_store = _make_stores(tmp_path)
+        user_store, rating_store = _make_stores()
         lifecycle, _, _ = _make_real_lifecycle(user_store, rating_store)
         connection = FakeConnection([
             _login_message("alice"),
@@ -194,9 +195,9 @@ def test_create_room_sequence_receives_role_then_snapshot_in_order(tmp_path):
     asyncio.run(scenario())
 
 
-def test_join_with_an_unknown_room_id_receives_room_rejected_and_stays_in_lobby(tmp_path):
+def test_join_with_an_unknown_room_id_receives_room_rejected_and_stays_in_lobby():
     async def scenario():
-        user_store, rating_store = _make_stores(tmp_path)
+        user_store, rating_store = _make_stores()
         lifecycle, _, disconnect_calls = _make_real_lifecycle(user_store, rating_store)
         connection = FakeConnection([
             _login_message("alice"),
@@ -213,9 +214,9 @@ def test_join_with_an_unknown_room_id_receives_room_rejected_and_stays_in_lobby(
     asyncio.run(scenario())
 
 
-def test_a_second_client_joining_an_existing_room_gets_black_and_the_rooms_real_snapshot(tmp_path):
+def test_a_second_client_joining_an_existing_room_gets_black_and_the_rooms_real_snapshot():
     async def scenario():
-        user_store, rating_store = _make_stores(tmp_path)
+        user_store, rating_store = _make_stores()
         lifecycle, game_room_registry, _ = _make_real_lifecycle(user_store, rating_store)
         creator_client = Participant(connection="creator-conn")
         placement = game_room_registry.create_private_room(creator_client)

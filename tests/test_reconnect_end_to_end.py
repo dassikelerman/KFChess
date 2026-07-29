@@ -10,6 +10,7 @@ from protocol.lobby_messages import Login, RoomIntent
 from protocol.registry import message_to_payload
 from server.rating import RatingStore
 from server.user_store import UserStore
+from tests.db_helpers import reset_users_table
 
 RECV_TIMEOUT_S = 5
 CLIENT_CLOSE_TIMEOUT_S = 2
@@ -40,11 +41,11 @@ async def _login(connection, username):
     return await _expect(connection, "LoggedIn")
 
 
-def test_reconnecting_with_the_same_username_within_the_grace_window_rejoins_the_room(tmp_path, monkeypatch):
+def test_reconnecting_with_the_same_username_within_the_grace_window_rejoins_the_room(monkeypatch):
     monkeypatch.setattr(ws_server, "PORT", TEST_PORT)
-    db_path = str(tmp_path / "test_users.db")
-    monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore(db_path))
-    monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore(db_path))
+    reset_users_table()
+    monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore())
+    monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore())
     monkeypatch.setattr(ws_server, "DISCONNECT_COUNTDOWN_SECONDS", 20)
 
     async def scenario():

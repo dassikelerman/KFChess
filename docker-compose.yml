@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kfchess
+      POSTGRES_PASSWORD: kfchess
+      POSTGRES_DB: kfchess
+    ports:
+      - "5432:5432"
+    volumes:
+      - kfchess-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kfchess -d kfchess"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  kfchess-postgres-data:

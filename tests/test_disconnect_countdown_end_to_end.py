@@ -9,6 +9,7 @@ from protocol.lobby_messages import Login, RoomIntent
 from protocol.registry import message_to_payload
 from server.rating import RatingStore
 from server.user_store import UserStore
+from tests.db_helpers import reset_users_table
 
 RECV_TIMEOUT_S = 5
 CLIENT_CLOSE_TIMEOUT_S = 2
@@ -39,11 +40,11 @@ async def _login(connection, username):
     return await _expect(connection, "LoggedIn")
 
 
-def test_a_mid_game_disconnect_broadcasts_a_countdown_and_eventually_resigns(tmp_path, monkeypatch):
+def test_a_mid_game_disconnect_broadcasts_a_countdown_and_eventually_resigns(monkeypatch):
     monkeypatch.setattr(ws_server, "PORT", TEST_PORT)
-    db_path = str(tmp_path / "test_users.db")
-    monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore(db_path))
-    monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore(db_path))
+    reset_users_table()
+    monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore())
+    monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore())
 
     # A real 20s countdown would make this "minimal" smoke test anything but -
     # GameRoomRegistry takes the countdown duration as a constructor param, so we

@@ -39,7 +39,7 @@ def test_kf_chess_is_installed_as_a_package_not_found_via_sys_path():
 
 
 def test_game_room_registry_has_no_per_room_task_bookkeeping():
-    registry = GameRoomRegistry(lambda connection, payload: None, RatingStore(":memory:"))
+    registry = GameRoomRegistry(lambda connection, payload: None, RatingStore())
     assert not hasattr(registry, "_game_loop_tasks_by_room_id")
     assert hasattr(registry, "tick")
 

@@ -6,6 +6,7 @@ from protocol.lobby_messages import Login
 from protocol.registry import message_to_payload
 from server.rating import RatingStore
 from server.user_store import UserStore
+from tests.db_helpers import reset_users_table
 
 
 class FakeConnection:
@@ -46,7 +47,8 @@ def _login_message(username, password="hunter2"):
 
 def _run_await_login(raw_messages, user_store=None):
     if user_store is None:
-        user_store = UserStore(":memory:")  # a real UserStore, just not file-backed
+        reset_users_table()
+        user_store = UserStore()
     connection = FakeConnection(raw_messages)
 
     async def scenario():
@@ -133,19 +135,20 @@ def test_a_connection_that_never_sends_anything_is_closed_after_the_timeout(monk
 # -- Feature 4: password / user_store integration ----------------------------
 
 
-def test_a_new_username_creates_an_account(tmp_path):
-    db_path = str(tmp_path / "test_users.db")
-    user_store = UserStore(db_path)
+def test_a_new_username_creates_an_account():
+    reset_users_table()
+    user_store = UserStore()
 
     connection, username, _ = _run_await_login([_login_message("alice", "hunter2")], user_store=user_store)
 
     assert username == "alice"
     assert connection.closed is None
-    assert RatingStore(db_path).get_rating("alice") == 1200
+    assert RatingStore().get_rating("alice") == 1200
 
 
 def test_an_existing_user_with_the_correct_password_succeeds():
-    user_store = UserStore(":memory:")
+    reset_users_table()
+    user_store = UserStore()
     user_store.create_or_verify("alice", "hunter2")  # account already exists
 
     connection, username, _ = _run_await_login([_login_message("alice", "hunter2")], user_store=user_store)
@@ -155,7 +158,8 @@ def test_an_existing_user_with_the_correct_password_succeeds():
 
 
 def test_an_existing_user_with_the_wrong_password_is_rejected_and_closed():
-    user_store = UserStore(":memory:")
+    reset_users_table()
+    user_store = UserStore()
     user_store.create_or_verify("alice", "correct-password")
 
     connection, username, _ = _run_await_login([_login_message("alice", "wrong-password")], user_store=user_store)

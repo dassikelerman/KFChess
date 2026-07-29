@@ -176,7 +176,6 @@ class GameSession:
     def _on_game_over(self, event):
         if self._ratings_updated:
             return
-        self._ratings_updated = True
 
         white_username = self._usernames.get(self._connection_for_role("white"))
         black_username = self._usernames.get(self._connection_for_role("black"))
@@ -185,10 +184,15 @@ class GameSession:
                 "game over but missing a username for a seat (white=%r, black=%r) - skipping rating update",
                 white_username, black_username,
             )
+            self._ratings_updated = True  # no username will ever appear later - this skip is final
             return
 
         winner_color = _ROLE_BY_COLOR.get(event.winner_color)
+        # Only mark this done once the write actually succeeds - a transient failure here
+        # (a real concern once this is a network call to Postgres, not a local sqlite file)
+        # must not silently and permanently skip the rating update with no retry.
         self._rating_store.update_ratings(white_username, black_username, winner_color)
+        self._ratings_updated = True
 
     # -- lookups ----------------------------------------------------------------
 

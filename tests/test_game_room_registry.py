@@ -8,6 +8,7 @@ from server.contracts import Participant, ParticipantState
 from server.rating import RatingStore
 from server.rooms import GameRoomRegistry, RoomPlacement
 from server.user_store import UserStore
+from tests.db_helpers import reset_users_table
 
 
 def _make_registry(rating_store=None):
@@ -17,7 +18,7 @@ def _make_registry(rating_store=None):
         sent.append((connection, payload))
 
     if rating_store is None:
-        rating_store = RatingStore(":memory:")
+        rating_store = RatingStore()
     return GameRoomRegistry(send_fn, rating_store), sent
 
 
@@ -205,7 +206,7 @@ def test_an_exception_in_one_rooms_tick_is_logged_and_does_not_affect_another_ro
             if connection == failing_connection:
                 raise RuntimeError("boom")
 
-        registry = GameRoomRegistry(send_fn, RatingStore(":memory:"))
+        registry = GameRoomRegistry(send_fn, RatingStore())
         failing_participant = Participant(connection=failing_connection)
         healthy_participant = _make_participant("healthy")
 
@@ -227,11 +228,11 @@ def test_an_exception_in_one_rooms_tick_is_logged_and_does_not_affect_another_ro
     asyncio.run(scenario())
 
 
-def test_create_private_room_wires_a_real_rating_store_into_the_sessions_rating_flow(tmp_path):
+def test_create_private_room_wires_a_real_rating_store_into_the_sessions_rating_flow():
     async def scenario():
-        db_path = str(tmp_path / "test_users.db")
-        user_store = UserStore(db_path)
-        rating_store = RatingStore(db_path)
+        reset_users_table()
+        user_store = UserStore()
+        rating_store = RatingStore()
         user_store.create_or_verify("alice", "hunter2")
         user_store.create_or_verify("bob", "hunter2")
         registry, _ = _make_registry(rating_store=rating_store)
@@ -256,7 +257,7 @@ def test_create_private_room_wires_a_real_rating_store_into_the_sessions_rating_
 def test_disconnect_countdown_params_are_threaded_into_every_session_it_builds():
     async def scenario():
         registry = GameRoomRegistry(
-            lambda connection, payload: None, RatingStore(":memory:"), disconnect_countdown_seconds=2,
+            lambda connection, payload: None, RatingStore(), disconnect_countdown_seconds=2,
         )
         white_participant = _make_participant("white")
         black_participant = _make_participant("black")
@@ -282,7 +283,7 @@ def test_disconnect_countdown_params_are_threaded_into_every_session_it_builds()
 def test_room_closes_itself_a_grace_period_after_the_game_ends():
     async def scenario():
         registry = GameRoomRegistry(
-            lambda connection, payload: None, RatingStore(":memory:"), room_close_grace_seconds=1,
+            lambda connection, payload: None, RatingStore(), room_close_grace_seconds=1,
         )
         participant = _make_participant("a")
         placement = registry.create_private_room(participant)
@@ -394,11 +395,11 @@ def test_try_reconnect_with_no_matching_disconnected_username_returns_none():
     asyncio.run(scenario())
 
 
-def test_create_matched_room_wires_a_real_rating_store_into_the_sessions_rating_flow(tmp_path):
+def test_create_matched_room_wires_a_real_rating_store_into_the_sessions_rating_flow():
     async def scenario():
-        db_path = str(tmp_path / "test_users.db")
-        user_store = UserStore(db_path)
-        rating_store = RatingStore(db_path)
+        reset_users_table()
+        user_store = UserStore()
+        rating_store = RatingStore()
         user_store.create_or_verify("alice", "hunter2")
         user_store.create_or_verify("bob", "hunter2")
         registry, _ = _make_registry(rating_store=rating_store)
