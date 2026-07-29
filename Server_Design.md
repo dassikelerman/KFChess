@@ -28,12 +28,14 @@ Shards / Observability, על Redis, PostgreSQL, Docker Compose ו-Kubernetes)
   `UserStore`, `RatingStore`, `GameRoomRegistry`, `Matchmaker` ולולאת השרת
   המשותפת. כל עותק הוא "shard" שמארח הרבה חדרים בבת אחת.
 - **Load Balancer** — נקודת הכניסה היחידה מהאינטרנט: מסיימת TLS ומנתבת כל
-  חיבור נכנס לאחד מעותקי ה-API Gateway/WS Gateway.
+  חיבור נכנס לאחד מעותקי ה-API Gateway/WS Gateway. בפועל תחת Kubernetes זה
+  לרוב Ingress Controller/Service מובנה, לא קוד ייעודי שכותבים בעצמנו.
 - **API Gateway** — שכבה חדשה מול פעולות שאינן זמן-אמת: אימות (מול Auth
-  Service), רשימת חדרים, היסטוריה, בקשת שידוך.
+  Service), ורשימת חדרים/היסטוריה (**Rooms API**).
 - **WS Gateway** — שכבה חדשה שתיפרד מ-`ConnectionLifecycle`: מחזיקה את
-  החיבור החי מול הלקוח (פקודות משחק, עדכוני מצב) ומנתבת אותו ל-Game Server
-  הנכון.
+  החיבור החי מול הלקוח (פקודות משחק, עדכוני מצב, **וגם בקשת שידוך** —
+  `PlayIntent` מגיע על אותו חיבור חי שכבר קיים, לא כקריאת REST נפרדת)
+  ומנתבת פקודות משחק ל-Game Server הנכון ובקשות שידוך ל-Matchmaker.
 - **Room Directory** — מיפוי גלובלי `room_id -> game_server_id`, המקביל למה
   ש-`GameRoomRegistry` כבר עושה בתוך תהליך אחד.
 - **Matchmaker** — שירות עצמאי שמכליל את `Matchmaker` הקיים, על תור שידוך
@@ -102,10 +104,10 @@ flowchart TB
 
     APIGW --> Auth
     Auth --> PG
-    APIGW -->|PlayIntent| MM
 
     WSGW -->|commands, snapshots| GS1
     WSGW -.->|lookup room_id| Dir
+    WSGW -.->|PlayIntent| MM
 
     MM --> Q
     MM -->|MatchFound| GA
@@ -367,8 +369,8 @@ Server Shard**. הראשון קורה פעם אחת בפתיחת החיבור; �
 גם את `GameSession` בזיכרון.
 
 **הפתרון:** לפצל לשתי שכבות. **API Gateway** (REST/HTTP) מטפל במה שאינו
-זמן-אמת: אימות מול Auth Service (PostgreSQL), רשימת חדרים, היסטוריה,
-ובקשת שידוך — במקום `ConnectionLifecycle._authenticate` שמריץ היום את
+זמן-אמת: אימות מול Auth Service (PostgreSQL), ורשימת חדרים/היסטוריה
+(**Rooms API**) — במקום `ConnectionLifecycle._authenticate` שמריץ היום את
 ההתחברות כהודעה ראשונה על אותו חיבור שממשיך לשאת גם את המשחק. **WS
 Gateway** מחזיק את החיבור החי, לאחר האימות, ומנתב אותו ל-Game Server
 הנכון. שני דברים שהפיצול הזה חייב להתמודד איתם:
@@ -376,10 +378,12 @@ Gateway** מחזיק את החיבור החי, לאחר האימות, ומנתב
 - **עלות אימות:** `UserStore` מבצע 200,000 איטרציות PBKDF2 סינכרוניות לכל
   התחברות — עלות CPU ממשית שתכנון קיבולת ה-API Gateway חייב לכלול, לא רק
   זמן תקשורת מול PostgreSQL.
-- **שחקן שממתין לשידוך:** בקשת השידוך עצמה יכולה לצאת מה-API Gateway,
-  אבל התוצאה (שידוך נמצא, שיבוץ לחדר) חייבת להגיע ללקוח על חיבור חי —
-  כלומר ה-WS Gateway כבר חייב להיות פתוח ומחזיק את השחקן (`PlayIntent`
-  יכול להשאירו ב-`SEARCHING` עד 60 שניות) עד שמתקבל שידוך. הוא אינו יכול
+- **שחקן שממתין לשידוך:** `PlayIntent` (כמו `MoveIntent`/`JumpIntent`)
+  מגיע על אותו חיבור חי שכבר קיים מול ה-WS Gateway — **לא** כקריאת REST
+  נפרדת מה-API Gateway, כי הוא נשלח אחרי שהשחקן כבר מחובר ומאומת
+  (`ClientMessageRouter._route_play_intent` היום). המשמעות: ה-WS Gateway
+  שולח אותו ישירות ל-Matchmaker, וחייב להחזיק את השחקן (`PlayIntent`
+  יכול להשאירו ב-`SEARCHING` עד 60 שניות) עד שמתקבל שידוך — הוא אינו יכול
   להיות חסר-מצב לחלוטין כל עוד יש תור המתנה.
 
 **איך שחקנים על שרתים שונים מגיעים לאותו חדר?** `GameSession` חי בזיכרון
@@ -438,6 +442,14 @@ liveness ו-allocation עצמאיים מאפס.
 הנחת "חדרים מתפנים בקצב סיום המשחקים" שחישוב הקיבולת בפרק הקודם נשען
 עליה. יש להוסיף סגירת חדר יזומה בתום המשחק, עם חלון חסד קצר, ולא להסתמך
 רק על ניתוק שקע.
+
+**תיחום היקף: cluster אחד, אזור אחד.** כל מה שתואר בפרק הזה הוא Kubernetes
+cluster בודד באזור אחד. קנה מידה עולמי אמיתי (100 מיליון רשומים, 10 מיליון
+פעילים) חוזר על אותה תמונה **per-region** — כמה clusters עצמאיים, כל אחד
+עם עותקי ה-Gateway/Matchmaker/Game Allocator/Game Server Shards שלו — עם
+ניתוב מודע-לאזור ברמת ה-DNS/Load Balancer שמכוון לקוח ל-cluster הקרוב לו.
+זה לא צעד מימוש נוסף במסמך הזה, רק תיחום מפורש של מה שכבר תואר: הפרקים
+למעלה מתארים cluster אחד, לא רפליקציה בין-אזורית.
 
 ---
 
@@ -586,5 +598,87 @@ _broadcast_snapshot`) **לא** מוחלף בדלתא — הוחלט להשאיר
 
 > **עיקרון מרכזי:** `EventDispatcher` נשאר מקומי לחדר בדיוק כפי שהוא היום;
 > רק מה שחוצה גבול שירות עובר דרך מתווך רשת.
+
+---
+
+## תרשים יעד — התמונה הסופית אחרי כל 11 השלבים
+
+התרשים למעלה ("תרשים ארכיטקטורה") ממפה כל רכיב למה שהוא מחליף בקוד הקיים.
+התרשים הבא הוא **תמונת היעד** אחרי שכל 11 השלבים הושלמו — לא שלב נוסף,
+אלא ריכוז חזותי של הסיכום שלמעלה שמיושר אחד-לאחד מול הארכיטקטורה
+שהקורס ממליץ עליה: אזור בודד (ראו תיחום ההיקף בפרק Kubernetes), עם
+Rooms API כתת-רכיב מפורש של API Gateway, Agones כ-fleet manager
+אופציונלי, ו-Observability כרכיב מלא ולא רק כפרוזה.
+
+```mermaid
+flowchart TB
+    Client(["Client"])
+
+    subgraph Region["אזור אחד — Kubernetes/K3s Cluster"]
+        LB["Load Balancer / Ingress<br/>TLS termination"]
+
+        subgraph GW["Gateways"]
+            APIGW["API Gateway<br/>REST: auth, rooms, history"]
+            WSGW["WS Gateways<br/>live connection: commands, snapshots"]
+        end
+
+        Auth["Auth Service"]
+        RoomsAPI["Rooms API"]
+        MM["Matchmaker"]
+        GA["Game Allocator"]
+        Agones["Agones (אופציונלי)<br/>fleet manager"]
+        Bus{{"NATS Event Bus<br/>cross-service events"}}
+
+        subgraph Shards["Game Server Shards"]
+            GS1["Shard #1<br/>GameSession + GameEngine"]
+            GS2["Shard #2"]
+            GSN["Shard #N"]
+        end
+
+        PG[("PostgreSQL<br/>accounts, ratings, history")]
+        Redis[("Redis<br/>Room Directory, reconnect, matchmaking queue")]
+        Obs["Observability<br/>logs, metrics, alerts, load tests"]
+    end
+
+    Client -->|HTTPS| LB
+    Client <-->|WSS| LB
+    LB -->|HTTP| APIGW
+    LB <-->|WebSocket| WSGW
+
+    APIGW --> Auth
+    APIGW --> RoomsAPI
+    Auth --> PG
+    RoomsAPI --> PG
+
+    WSGW -->|commands, snapshots| GS1
+    WSGW -.->|lookup room_id, reconnect| Redis
+    WSGW -.->|PlayIntent| MM
+
+    MM -.->|shared queue| Redis
+    MM -->|MatchFound| GA
+    GA -.->|register room| Redis
+    GA -.->|assign| GS2
+
+    MM -.-> Bus
+    GA -.-> Bus
+    WSGW -.-> Bus
+    Agones -.-> Bus
+    Agones -.->|health, allocate| GS1
+
+    GS1 --> PG
+    GS2 --> PG
+    GSN --> PG
+    GS1 -.-> Bus
+
+    GS1 --> Obs
+    MM -.-> Obs
+    GA -.-> Obs
+```
+
+הבדל אחד מכוון מול הדיאגרמה של הקורס: `PlayIntent` יוצא מ-**WS Gateway**
+ולא מ-API Gateway — כי הוא מגיע על חיבור חי שכבר קיים ומאומת (ראו פרק API
+Gateway ו-WS Gateway למעלה), לא כקריאת REST נפרדת. זו לא סטייה מהעיקרון של
+הקורס (הם עצמם מציירים קו בין WS Gateways ל-Matchmaker, לא בין API Gateway
+ל-Matchmaker) — זה תיקון שכבר יושם גם בתרשים הקודם ובקוד עצמו.
 
 </div>
