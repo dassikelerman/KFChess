@@ -1,12 +1,11 @@
 """ClientMessageRouter: choose which application component handles a typed message.
 
 Dispatches by exact type(message) through a handler registry built once in __init__ -
-one entry per supported message class, mapping straight to the existing private handler
-method for it (MoveIntent and JumpIntent share one, since both are in-game actions).
-Checks the participant's own state (already in a room? already authenticated?) before
-doing anything, then delegates to a GameRoomRegistry, a Matchmaker, or a GameSession.
-Every message here is already a typed object decoded once by ConnectionLifecycle - this
-class never touches a socket, JSON, or a dict.
+one entry per supported message class, mapping straight to its own private handler
+method. Checks the participant's own state (already in a room? already authenticated?)
+before doing anything, then delegates to a GameRoomRegistry, a Matchmaker, or a
+GameSession. Every message here is already a typed object decoded once by
+ConnectionLifecycle - this class never touches a socket, JSON, or a dict.
 """
 
 import logging
@@ -41,8 +40,8 @@ class ClientMessageRouter:
         # this instance.
         self._handlers_by_type = {
             Login: self._route_login,
-            MoveIntent: self._route_game_action,
-            JumpIntent: self._route_game_action,
+            MoveIntent: self._route_move_intent,
+            JumpIntent: self._route_jump_intent,
             PlayIntent: self._route_play_intent,
             CreateRoomIntent: self._route_create_room_intent,
             JoinRoomIntent: self._route_join_room_intent,
@@ -62,7 +61,15 @@ class ClientMessageRouter:
         if participant.authenticated:
             self._reject(participant, "already authenticated")
 
-    def _route_game_action(self, participant, message):
+    def _route_move_intent(self, participant, message):
+        session = self._require_active_session(participant, message)
+        session.handle_move(participant.connection, message)
+
+    def _route_jump_intent(self, participant, message):
+        session = self._require_active_session(participant, message)
+        session.handle_jump(participant.connection, message)
+
+    def _require_active_session(self, participant, message):
         if participant.state is not ParticipantState.IN_ROOM:
             self._reject(
                 participant, f"{type(message).__name__} requires an active room (state={participant.state.name})",
@@ -70,11 +77,7 @@ class ClientMessageRouter:
         session = self._game_room_registry.game_session_for(participant)
         if session is None:
             self._reject(participant, "no active game session for this room")
-
-        if isinstance(message, MoveIntent):
-            session.handle_move(participant.connection, message)
-        else:
-            session.handle_jump(participant.connection, message)
+        return session
 
     def _route_play_intent(self, participant, message):
         if participant.state is ParticipantState.IN_ROOM:

@@ -84,8 +84,8 @@ def test_client_message_router_class_has_no_json_or_websocket_specific_dependenc
     "message_type, handler_name",
     [
         (Login, "_route_login"),
-        (MoveIntent, "_route_game_action"),
-        (JumpIntent, "_route_game_action"),
+        (MoveIntent, "_route_move_intent"),
+        (JumpIntent, "_route_jump_intent"),
         (PlayIntent, "_route_play_intent"),
         (CreateRoomIntent, "_route_create_room_intent"),
         (JoinRoomIntent, "_route_join_room_intent"),
