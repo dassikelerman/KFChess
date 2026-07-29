@@ -5,6 +5,7 @@ import pytest
 
 from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login
 from protocol.registry import message_to_payload
+from server.api_gateway.auth import AuthGateway
 from server.client_message_router import ClientMessageRouter
 from server.connection_lifecycle import ConnectionLifecycle
 from server.contracts import Participant, ParticipantState
@@ -13,6 +14,7 @@ from server.room_directory import RoomDirectory
 from server.rooms import GameRoomRegistry
 from server.matchmaker import Matchmaker
 from server.user_store import UserStore
+from server.ws_gateway.connection_handler import ConnectionHandler
 from tests.db_helpers import reset_users_table
 from tests.redis_helpers import flush_directory
 
@@ -71,7 +73,9 @@ def _make_lifecycle(user_store, rating_store):
     async def on_disconnect(participant):
         disconnect_calls.append(participant)
 
-    lifecycle = ConnectionLifecycle(user_store, rating_store, router, on_disconnect)
+    auth_gateway = AuthGateway(user_store)
+    connection_handler = ConnectionHandler(rating_store, router)
+    lifecycle = ConnectionLifecycle(auth_gateway, connection_handler, on_disconnect)
     return lifecycle, disconnect_calls
 
 
@@ -173,7 +177,9 @@ def _make_real_lifecycle(user_store, rating_store):
         disconnect_calls.append(participant)
         await game_room_registry.remove_participant(participant)
 
-    lifecycle = ConnectionLifecycle(user_store, rating_store, router, on_disconnect)
+    auth_gateway = AuthGateway(user_store)
+    connection_handler = ConnectionHandler(rating_store, router)
+    lifecycle = ConnectionLifecycle(auth_gateway, connection_handler, on_disconnect)
     return lifecycle, game_room_registry, disconnect_calls
 
 

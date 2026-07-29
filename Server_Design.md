@@ -528,10 +528,18 @@ _broadcast_snapshot`) **לא** מוחלף בדלתא — הוחלט להשאיר
 שלמעלה — כל תיקייה היא בדיוק אחד מחמשת הרכיבים שכבר מוגדרים כאן, בלי המצאת
 רכיב נוסף:
 
-- **`api_gateway/`** (`main.py`, `routes.py`, `auth.py`) — מחליף את חלקי
-  האימות של `ConnectionLifecycle._authenticate`/`await_login` היום.
-- **`ws_gateway/`** (`main.py`, `connection_manager.py`) — מחליף את שאר
-  `ConnectionLifecycle` (מחזיק חיבור, מנתב לפי `room_id`/Directory).
+- **`api_gateway/`** (`auth.py` קיים כבר; `main.py`/`routes.py` עדיין לא) —
+  `auth.py` מיישם את `AuthGateway`: כל לוגיקת ההתחברות שהייתה ב-
+  `ConnectionLifecycle._authenticate`/`await_login` עברה לשם במלואה
+  (שלב 3 בוצע). `main.py`/`routes.py` (REST אמיתי: רשימת חדרים/היסטוריה —
+  Rooms API) עדיין לא קיימים; הם ממתינים לתפקיד שלא מומש בקוד בכלל היום.
+- **`ws_gateway/`** (`connection_handler.py` קיים כבר; `main.py` עדיין לא) —
+  `connection_handler.py` מיישם את `ConnectionHandler`: כל מה שהיה
+  ב-`ConnectionLifecycle` אחרי האימות (כניסה ללובי, ניסיון התחברות מחדש,
+  לולאת הקבלה, תרגום תוצאת הניתוב) עבר לשם במלואה; `ConnectionLifecycle`
+  עצמו (`server/connection_lifecycle.py`) נשאר רק תזמור דק שמחבר בין
+  `AuthGateway` ל-`ConnectionHandler` (שלב 3 בוצע). `main.py` עדיין לא קיים —
+  זה ממתין לפיצול בפועל לתהליך רשת נפרד (שלב 6/7).
 - **`matchmaker/`** (`main.py`, `queue.py`) — מכליל את `server/matchmaker.py`
   הקיים מול תור משותף במקום רשימה בזיכרון תהליך אחד.
 - **`game_allocator/`** (`main.py`, `allocator.py`) — רכיב חדש (ראו פרק
@@ -548,11 +556,15 @@ _broadcast_snapshot`) **לא** מוחלף בדלתא — הוחלט להשאיר
    שני צרכנים משני שירותים שונים. אם הם לא נשארים ספריית-קוד משותפת
    שנקראת ישירות (מה שדורש ששני השירותים ידברו מול אותו PostgreSQL), צריך
    להחליט אם הם הופכים לשירות "חשבונות" עצמאי משלהם.
-2. **ל-`ClientMessageRouter` אין תיקייה.** הניתוב-לפי-סוג-הודעה שהוא עושה
-   היום כקריאת פונקציה ישירה (`self._matchmaker.enqueue_or_match(...)`,
+2. **ל-`ClientMessageRouter` אין תיקייה משלו עדיין.** `ConnectionHandler`
+   (בתוך `ws_gateway/` עכשיו) כבר **קורא** לו ישירות
+   (`self._router.route(...)`), אבל המחלקה עצמה עדיין מוגדרת ב-
+   `server/client_message_router.py` ברמה העליונה, לא בתוך `ws_gateway/`.
+   הניתוב-לפי-סוג-הודעה שהוא עושה היום כקריאת פונקציה ישירה
+   (`self._matchmaker.enqueue_or_match(...)`,
    `self._game_room_registry.game_session_for(...)`) חייב להפוך לקריאת רשת
-   ברגע שהיעד הוא שירות נפרד — הבית הטבעי הוא בתוך `ws_gateway/`, אבל זו
-   נקודת עבודה אמיתית, לא רק הזזת קובץ.
+   ברגע שהיעד הוא שירות נפרד — זו עדיין נקודת עבודה אמיתית, לא רק הזזת
+   קובץ, ונשארת פתוחה לשלב שבו ה-WS Gateway הופך לתהליך נפרד בפועל.
 
 `protocol/`, `engine/`, `events/`, `model/`, `rules/` נשארים חבילות משותפות
 מחוץ ל-`server/`, בדיוק כפי שהם היום — אף שירות לא מעתיק אותם לעצמו.

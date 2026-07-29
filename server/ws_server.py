@@ -22,6 +22,7 @@ import constants
 from logging_setup import configure_logging
 from protocol.lobby_messages import MatchNotFound
 from protocol.registry import message_to_payload
+from server.api_gateway.auth import AuthGateway
 from server.client_message_router import ClientMessageRouter
 from server.connection_lifecycle import ConnectionLifecycle
 from server.contracts import MessageSender, ParticipantState
@@ -30,6 +31,7 @@ from server.rating import RatingStore
 from server.room_directory import RoomDirectory
 from server.rooms import GameRoomRegistry
 from server.user_store import UserStore
+from server.ws_gateway.connection_handler import ConnectionHandler
 
 HOST = "localhost"
 PORT = 8765
@@ -87,7 +89,9 @@ async def main():
         matchmaker.cancel_search(participant)
         await room_registry.remove_participant(participant)
 
-    connection_lifecycle = ConnectionLifecycle(user_store, rating_store, router, on_disconnect)
+    auth_gateway = AuthGateway(user_store)
+    connection_handler = ConnectionHandler(rating_store, router)
+    connection_lifecycle = ConnectionLifecycle(auth_gateway, connection_handler, on_disconnect)
 
     server_loop_task = asyncio.create_task(_run_server_loop(matchmaker, room_registry, _unicast))
     try:
