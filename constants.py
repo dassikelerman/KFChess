@@ -46,3 +46,8 @@ RATING_K_FACTOR = 32                 # ELO K-factor: the most one game can move 
 MATCHMAKING_RATING_TOLERANCE = 100   # "Play" pairs seekers only within +/-100 rating
 MATCHMAKING_TIMEOUT_SECONDS = 60     # a lone seeker waits this long before giving up
 DISCONNECT_COUNTDOWN_SECONDS = 20    # a dropped player auto-resigns after this long
+
+# Not part of the presentation's mandated numbers above - our own choice for how long a
+# finished game's room stays around after GameOverEvent before GameRoomRegistry tears it
+# down itself, instead of waiting on a client to eventually disconnect (see rooms.py).
+ROOM_CLOSE_GRACE_SECONDS = 10

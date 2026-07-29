@@ -279,6 +279,50 @@ def test_disconnect_countdown_params_are_threaded_into_every_session_it_builds()
     asyncio.run(scenario())
 
 
+def test_room_closes_itself_a_grace_period_after_the_game_ends():
+    async def scenario():
+        registry = GameRoomRegistry(
+            lambda connection, payload: None, RatingStore(":memory:"), room_close_grace_seconds=1,
+        )
+        participant = _make_participant("a")
+        placement = registry.create_private_room(participant)
+
+        placement.session.components.engine.resign(PieceColor.WHITE)
+
+        registry.tick(500)
+        assert placement.room_id in registry._sessions_by_room_id  # grace period not over yet
+        assert placement.room_id in registry._connections_by_room_id
+
+        registry.tick(600)  # 500 + 600 > 1000ms grace period
+        assert placement.room_id not in registry._sessions_by_room_id
+        assert placement.room_id not in registry._connections_by_room_id
+
+        registry.tick(16)  # a tick after closure must not raise or resurrect the room
+        assert placement.room_id not in registry._sessions_by_room_id
+
+        # The client eventually disconnecting after the room is already gone must be a no-op.
+        await registry.remove_participant(participant)
+
+    asyncio.run(scenario())
+
+
+def test_room_stays_open_while_the_game_is_still_in_progress():
+    async def scenario():
+        registry, sent = _make_registry()
+        participant = _make_participant("a")
+        placement = registry.create_private_room(participant)
+
+        registry.tick(16)
+        registry.tick(16)
+
+        assert placement.room_id in registry._sessions_by_room_id
+        assert placement.session.components.engine.game_over is False
+
+        await registry.remove_participant(participant)
+
+    asyncio.run(scenario())
+
+
 def test_create_matched_room_sends_role_and_snapshot_to_both_connections_with_correct_colors():
     async def scenario():
         registry, sent = _make_registry()

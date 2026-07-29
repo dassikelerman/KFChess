@@ -2,8 +2,11 @@
 
 Owns the room id -> GameSession mapping. Builds each GameSession fully wired (its
 NetworkPublisher is constructor-injected, never assigned afterward) and tears a room
-down once its last connection leaves. It does not decode wire messages or validate a
-participant's state - ClientMessageRouter does that before ever calling in here.
+down once its last connection leaves, or once its game has been over for
+ROOM_CLOSE_GRACE_SECONDS - whichever happens first, so a room doesn't sit in memory
+forever just because a client never closes its socket after GameOverEvent. It does not
+decode wire messages or validate a participant's state - ClientMessageRouter does that
+before ever calling in here.
 
 tick(dt_ms) advances every active room from the one server loop (see server/ws_server.py)
 instead of each room running its own asyncio task - a room failing mid-tick is logged and
@@ -44,12 +47,15 @@ class GameRoomRegistry:
     def __init__(
         self, send_fn: MessageSender, rating_store: RatingRepository,
         disconnect_countdown_seconds: int = constants.DISCONNECT_COUNTDOWN_SECONDS,
+        room_close_grace_seconds: int = constants.ROOM_CLOSE_GRACE_SECONDS,
     ):
         self._send_fn = send_fn
         self._rating_store = rating_store
         self._disconnect_countdown_seconds = disconnect_countdown_seconds
+        self._room_close_grace_ms = room_close_grace_seconds * 1000
         self._sessions_by_room_id = {}
         self._connections_by_room_id = {}
+        self._closing_after_ms = {}
 
     def create_private_room(self, participant):
         room_id, session = self._open_room()
@@ -116,8 +122,18 @@ class GameRoomRegistry:
         try:
             session.tick(dt_ms)
             self._broadcast_snapshot(room_id, session)
+            self._advance_room_closure(room_id, session, dt_ms)
         except Exception:
             logger.exception("game tick for room %s failed", room_id)
+
+    def _advance_room_closure(self, room_id, session, dt_ms):
+        if not session.components.engine.game_over:
+            return
+        remaining_ms = self._closing_after_ms.get(room_id, self._room_close_grace_ms) - dt_ms
+        if remaining_ms <= 0:
+            self._close_room(room_id)
+        else:
+            self._closing_after_ms[room_id] = remaining_ms
 
     # -- room lifecycle -------------------------------------------------------
 
@@ -175,3 +191,4 @@ class GameRoomRegistry:
     def _close_room(self, room_id):
         self._connections_by_room_id.pop(room_id, None)
         self._sessions_by_room_id.pop(room_id, None)
+        self._closing_after_ms.pop(room_id, None)
