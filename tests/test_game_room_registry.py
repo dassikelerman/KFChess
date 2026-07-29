@@ -6,9 +6,26 @@ from model.piece import PieceColor
 from model.position import Position
 from server.contracts import Participant, ParticipantState
 from server.rating import RatingStore
+from server.room_directory import RoomDirectory
 from server.rooms import GameRoomRegistry, RoomPlacement
 from server.user_store import UserStore
 from tests.db_helpers import reset_users_table
+from tests.redis_helpers import flush_directory
+
+
+class _FakeRatingStore:
+    """update_ratings() against a real RatingStore needs the usernames to already exist
+    in Postgres - fine for the two tests that specifically exercise that wiring, but
+    every other test here just needs GameOverEvent to be handled without touching a
+    real database for usernames it never registered."""
+
+    def update_ratings(self, white_username, black_username, winner_color):
+        return (0, 0)
+
+
+def _make_directory(game_server_id="test-shard"):
+    flush_directory()
+    return RoomDirectory(game_server_id)
 
 
 def _make_registry(rating_store=None):
@@ -18,12 +35,12 @@ def _make_registry(rating_store=None):
         sent.append((connection, payload))
 
     if rating_store is None:
-        rating_store = RatingStore()
-    return GameRoomRegistry(send_fn, rating_store), sent
+        rating_store = _FakeRatingStore()
+    return GameRoomRegistry(send_fn, rating_store, _make_directory()), sent
 
 
 def _make_participant(label):
-    return Participant(connection=f"conn-{label}")
+    return Participant(connection=f"conn-{label}", username=label)
 
 
 def test_create_private_room_returns_a_unique_room_id_and_creator_becomes_white():
@@ -39,6 +56,22 @@ def test_create_private_room_returns_a_unique_room_id_and_creator_becomes_white(
         assert participant.role == "white"
         assert participant.room_id == placement.room_id
         assert participant.state is ParticipantState.IN_ROOM
+
+        await registry.remove_participant(participant)
+
+    asyncio.run(scenario())
+
+
+def test_create_private_room_also_returns_a_join_code_for_a_friend_to_use():
+    async def scenario():
+        registry, _ = _make_registry()
+        participant = _make_participant("a")
+
+        placement = registry.create_private_room(participant)
+
+        assert placement.join_code
+        assert len(placement.join_code) == constants.JOIN_CODE_LENGTH
+        assert placement.join_code != placement.room_id
 
         await registry.remove_participant(participant)
 
@@ -62,39 +95,150 @@ def test_two_create_private_room_calls_produce_distinct_room_ids():
     asyncio.run(scenario())
 
 
-def test_generate_unique_room_id_retries_on_collision(monkeypatch):
-    registry, _ = _make_registry()
-    registry._sessions_by_room_id["aaaaaa"] = object()
-    values = iter(["aaaaaa", "bbbbbb"])
-    monkeypatch.setattr("server.rooms.secrets.token_hex", lambda n: next(values))
+def test_create_private_room_retries_the_room_id_after_a_directory_collision(monkeypatch):
+    async def scenario():
+        registry, _ = _make_registry()
+        registry._directory.reserve_new_room("aaaa", [])  # pre-occupy "aaaa"
+        values = iter(["aaaa", "bbbb"])
+        monkeypatch.setattr("server.rooms.secrets.token_hex", lambda n: next(values))
 
-    room_id = registry._generate_unique_room_id()
+        participant = _make_participant("a")
+        placement = registry.create_private_room(participant)
 
-    assert room_id == "bbbbbb"
+        assert placement.room_id == "bbbb"
+
+        await registry.remove_participant(participant)
+
+    asyncio.run(scenario())
 
 
-def test_join_private_room_assigns_black_then_spectator_and_none_for_an_unknown_room():
+def test_create_private_room_rejects_a_creator_already_seated_elsewhere():
+    async def scenario():
+        registry, _ = _make_registry()
+        participant = Participant(connection="conn-dup", username="alice")
+        registry._directory.reserve_new_room("room-elsewhere", ["alice"])
+
+        try:
+            registry.create_private_room(participant)
+            assert False, "expected AlreadyInRoomError"
+        except Exception as error:
+            assert type(error).__name__ == "AlreadyInRoomError"
+
+    asyncio.run(scenario())
+
+
+def test_create_private_room_rolls_back_the_directory_reservation_if_local_construction_fails(monkeypatch):
+    # The Redis reservation always happens first. If building the local GameSession
+    # then blows up for any reason, the reservation must not survive - otherwise the
+    # creator's username stays falsely marked "in a room" forever, with no room to
+    # match, and they can never create or join another one on this connection.
+    async def scenario():
+        registry, _ = _make_registry()
+        participant = Participant(connection="conn-a", username="alice")
+
+        def _raise(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("server.rooms.GameSession", _raise)
+
+        try:
+            registry.create_private_room(participant)
+            assert False, "expected RuntimeError"
+        except RuntimeError:
+            pass
+
+        assert registry._directory.get_room_for_username("alice") is None
+        assert registry._sessions_by_room_id == {}
+        assert registry._connections_by_room_id == {}
+        assert registry._participants_by_room_id == {}
+
+    asyncio.run(scenario())
+
+
+def test_create_matched_room_rolls_back_the_directory_reservation_if_local_construction_fails(monkeypatch):
+    async def scenario():
+        registry, sent = _make_registry()
+        white = Participant(connection="conn-white", username="alice")
+        black = Participant(connection="conn-black", username="bob")
+
+        def _raise(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("server.rooms.GameSession", _raise)
+
+        try:
+            registry.create_matched_room(white, black)
+            assert False, "expected RuntimeError"
+        except RuntimeError:
+            pass
+
+        assert registry._directory.get_room_for_username("alice") is None
+        assert registry._directory.get_room_for_username("bob") is None
+        assert registry._sessions_by_room_id == {}
+        # A crash here must not silently notify anyone of a match that never happened.
+        assert sent == []
+
+    asyncio.run(scenario())
+
+
+def test_join_private_room_assigns_black_then_spectator_and_none_for_an_unknown_code():
     async def scenario():
         registry, _ = _make_registry()
         creator = _make_participant("a")
         placement = registry.create_private_room(creator)
 
         second = _make_participant("b")
-        second_placement = registry.join_private_room(second, placement.room_id)
+        second_placement = registry.join_private_room(second, placement.join_code)
         assert second_placement.role == "black"
         assert second.role == "black"
         assert second.room_id == placement.room_id
         assert second.state is ParticipantState.IN_ROOM
 
         third = _make_participant("c")
-        third_placement = registry.join_private_room(third, placement.room_id)
+        third_placement = registry.join_private_room(third, placement.join_code)
         assert third_placement.role == "spectator"
 
-        assert registry.join_private_room(_make_participant("d"), "no-such-room") is None
+        assert registry.join_private_room(_make_participant("d"), "NOSUCH") is None
 
         await registry.remove_participant(creator)
         await registry.remove_participant(second)
         await registry.remove_participant(third)
+
+    asyncio.run(scenario())
+
+
+def test_join_private_room_rejects_a_joiner_already_seated_elsewhere():
+    async def scenario():
+        registry, _ = _make_registry()
+        creator = _make_participant("a")
+        placement = registry.create_private_room(creator)
+        elsewhere_participant = Participant(connection="conn-elsewhere", username="bob")
+        registry._directory.reserve_new_room("room-elsewhere", ["bob"])
+
+        try:
+            registry.join_private_room(elsewhere_participant, placement.join_code)
+            assert False, "expected AlreadyInRoomError"
+        except Exception as error:
+            assert type(error).__name__ == "AlreadyInRoomError"
+
+        await registry.remove_participant(creator)
+
+    asyncio.run(scenario())
+
+
+def test_join_private_room_handles_a_directory_entry_with_no_local_session():
+    # Defensive branch for the eventual multi-shard world: the Directory resolves a
+    # join_code to a room_id this process never actually built locally (it always
+    # will in today's single-process step, but the code must not crash if it doesn't).
+    async def scenario():
+        registry, _ = _make_registry()
+        registry._directory.reserve_new_room("orphan-room", [], join_code="ORPHAN1")
+        joiner = Participant(connection="conn-joiner", username="joiner")
+
+        result = registry.join_private_room(joiner, "ORPHAN1")
+
+        assert result is None
+        assert registry._directory.get_room_for_username("joiner") is None
 
     asyncio.run(scenario())
 
@@ -152,7 +296,7 @@ def test_remove_client_leaves_the_room_intact_when_other_connections_remain():
         creator = _make_participant("a")
         placement = registry.create_private_room(creator)
         second = _make_participant("b")
-        registry.join_private_room(second, placement.room_id)
+        registry.join_private_room(second, placement.join_code)
 
         became_empty = await registry.remove_participant(creator)
 
@@ -206,8 +350,8 @@ def test_an_exception_in_one_rooms_tick_is_logged_and_does_not_affect_another_ro
             if connection == failing_connection:
                 raise RuntimeError("boom")
 
-        registry = GameRoomRegistry(send_fn, RatingStore())
-        failing_participant = Participant(connection=failing_connection)
+        registry = GameRoomRegistry(send_fn, _FakeRatingStore(), _make_directory())
+        failing_participant = Participant(connection=failing_connection, username="failing")
         healthy_participant = _make_participant("healthy")
 
         failing_placement = registry.create_private_room(failing_participant)
@@ -240,7 +384,7 @@ def test_create_private_room_wires_a_real_rating_store_into_the_sessions_rating_
         black_participant = Participant(connection="conn-black", username="bob")
 
         placement = registry.create_private_room(white_participant)
-        registry.join_private_room(black_participant, placement.room_id)
+        registry.join_private_room(black_participant, placement.join_code)
 
         event = GameOverEvent(winner_color=PieceColor.WHITE, at_ms=100)
         placement.session.components.dispatcher.publish(event)
@@ -257,12 +401,12 @@ def test_create_private_room_wires_a_real_rating_store_into_the_sessions_rating_
 def test_disconnect_countdown_params_are_threaded_into_every_session_it_builds():
     async def scenario():
         registry = GameRoomRegistry(
-            lambda connection, payload: None, RatingStore(), disconnect_countdown_seconds=2,
+            lambda connection, payload: None, _FakeRatingStore(), _make_directory(), disconnect_countdown_seconds=2,
         )
         white_participant = _make_participant("white")
         black_participant = _make_participant("black")
         placement = registry.create_private_room(white_participant)
-        registry.join_private_room(black_participant, placement.room_id)
+        registry.join_private_room(black_participant, placement.join_code)
 
         events = []
         placement.session.components.dispatcher.subscribe(PlayerDisconnectedEvent, events.append)
@@ -283,7 +427,7 @@ def test_disconnect_countdown_params_are_threaded_into_every_session_it_builds()
 def test_room_closes_itself_a_grace_period_after_the_game_ends():
     async def scenario():
         registry = GameRoomRegistry(
-            lambda connection, payload: None, RatingStore(), room_close_grace_seconds=1,
+            lambda connection, payload: None, _FakeRatingStore(), _make_directory(), room_close_grace_seconds=1,
         )
         participant = _make_participant("a")
         placement = registry.create_private_room(participant)
@@ -310,12 +454,12 @@ def test_room_closes_itself_a_grace_period_after_the_game_ends():
 def test_close_room_resets_still_connected_participants_back_to_the_lobby():
     async def scenario():
         registry = GameRoomRegistry(
-            lambda connection, payload: None, RatingStore(), room_close_grace_seconds=1,
+            lambda connection, payload: None, _FakeRatingStore(), _make_directory(), room_close_grace_seconds=1,
         )
         white_participant = _make_participant("white")
         black_participant = _make_participant("black")
         placement = registry.create_private_room(white_participant)
-        registry.join_private_room(black_participant, placement.room_id)
+        registry.join_private_room(black_participant, placement.join_code)
 
         placement.session.components.engine.resign(PieceColor.WHITE)
         registry.tick(1100)  # past the 1s grace period
@@ -329,15 +473,37 @@ def test_close_room_resets_still_connected_participants_back_to_the_lobby():
     asyncio.run(scenario())
 
 
-def test_close_room_does_not_touch_a_participant_that_already_disconnected():
+def test_close_room_removes_the_directory_entries_for_room_users_and_join_code():
     async def scenario():
+        directory = _make_directory()
         registry = GameRoomRegistry(
-            lambda connection, payload: None, RatingStore(), room_close_grace_seconds=1,
+            lambda connection, payload: None, _FakeRatingStore(), directory, room_close_grace_seconds=1,
         )
         white_participant = _make_participant("white")
         black_participant = _make_participant("black")
         placement = registry.create_private_room(white_participant)
-        registry.join_private_room(black_participant, placement.room_id)
+        registry.join_private_room(black_participant, placement.join_code)
+
+        placement.session.components.engine.resign(PieceColor.WHITE)
+        registry.tick(1100)
+
+        assert directory.get_room_owner(placement.room_id) is None
+        assert directory.get_room_for_username("white") is None
+        assert directory.get_room_for_username("black") is None
+        assert directory.reserve_join(placement.join_code, "someone-else") is None
+
+    asyncio.run(scenario())
+
+
+def test_close_room_does_not_touch_a_participant_that_already_disconnected():
+    async def scenario():
+        registry = GameRoomRegistry(
+            lambda connection, payload: None, _FakeRatingStore(), _make_directory(), room_close_grace_seconds=1,
+        )
+        white_participant = _make_participant("white")
+        black_participant = _make_participant("black")
+        placement = registry.create_private_room(white_participant)
+        registry.join_private_room(black_participant, placement.join_code)
 
         await registry.remove_participant(white_participant)  # drops mid-game, before it ends
         room_id_seen_by_white_before_close = white_participant.room_id
@@ -358,12 +524,12 @@ def test_close_room_does_not_touch_a_participant_that_already_disconnected():
 def test_close_room_resets_a_reconnected_participant_not_the_stale_pre_reconnect_one():
     async def scenario():
         registry = GameRoomRegistry(
-            lambda connection, payload: None, RatingStore(), room_close_grace_seconds=1,
+            lambda connection, payload: None, _FakeRatingStore(), _make_directory(), room_close_grace_seconds=1,
         )
         white_participant = Participant(connection="conn-white", username="alice")
         black_participant = Participant(connection="conn-black", username="bob")
         placement = registry.create_private_room(white_participant)
-        registry.join_private_room(black_participant, placement.room_id)
+        registry.join_private_room(black_participant, placement.join_code)
 
         await registry.remove_participant(white_participant)  # alice drops, countdown starts
         reconnected = Participant(connection="conn-white-new", username="alice")
@@ -427,13 +593,32 @@ def test_create_matched_room_sends_role_and_snapshot_to_both_connections_with_co
     asyncio.run(scenario())
 
 
+def test_create_matched_room_rejects_a_reservation_conflict_and_notifies_both_sides():
+    async def scenario():
+        registry, sent = _make_registry()
+        white_participant = Participant(connection="conn-white", username="alice", rating=1200)
+        black_participant = Participant(connection="conn-black", username="bob", rating=1180)
+        registry._directory.reserve_new_room("room-elsewhere", ["bob"])  # bob is already seated
+
+        registry.create_matched_room(white_participant, black_participant)
+
+        assert white_participant.state is ParticipantState.LOBBY
+        assert black_participant.state is ParticipantState.LOBBY
+        white_payloads = [payload for connection, payload in sent if connection == "conn-white"]
+        black_payloads = [payload for connection, payload in sent if connection == "conn-black"]
+        assert [p["type"] for p in white_payloads] == ["MatchNotFound"]
+        assert [p["type"] for p in black_payloads] == ["MatchNotFound"]
+
+    asyncio.run(scenario())
+
+
 def test_try_reconnect_places_a_new_connection_back_into_its_old_room_and_seat():
     async def scenario():
         registry, _ = _make_registry()
         white_participant = Participant(connection="conn-white", username="alice")
         black_participant = Participant(connection="conn-black", username="bob")
         placement = registry.create_private_room(white_participant)
-        registry.join_private_room(black_participant, placement.room_id)
+        registry.join_private_room(black_participant, placement.join_code)
 
         await registry.remove_participant(white_participant)  # alice drops mid-game, countdown starts
 

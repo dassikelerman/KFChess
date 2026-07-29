@@ -51,3 +51,23 @@ DISCONNECT_COUNTDOWN_SECONDS = 20    # a dropped player auto-resigns after this 
 # finished game's room stays around after GameOverEvent before GameRoomRegistry tears it
 # down itself, instead of waiting on a client to eventually disconnect (see rooms.py).
 ROOM_CLOSE_GRACE_SECONDS = 10
+
+# --- Redis room directory (server/room_directory.py) -------------------------------
+# room_id is 128 bits (16 random bytes -> 32 hex chars) so the shared Directory can
+# allocate it with negligible collision risk at world scale; it is never typed by a
+# human, unlike JOIN_CODE_LENGTH below.
+ROOM_ID_BYTES = 16
+# join_code is only for a private room's creator to read aloud/type to a friend - short,
+# and drawn from an alphabet with no visually-confusable characters (no 0/O, 1/I/l).
+JOIN_CODE_LENGTH = 6
+JOIN_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+# Last-resort backstop on directory:room/directory:user/directory:join entries - set
+# once at creation, never refreshed. The real staleness signal is the owning shard's
+# heartbeat (below); this TTL only reclaims entries nobody ever looks up again after
+# their shard has died.
+DIRECTORY_KEY_TTL_SECONDS = 6 * 60 * 60
+# Each Game Server process refreshes one directory:shard:{id}:alive key instead of a
+# TTL per room/user - O(shards), not O(rooms x users). TTL must comfortably outlast one
+# refresh interval so a slow tick doesn't make a live shard look dead.
+SHARD_HEARTBEAT_TTL_SECONDS = 30
+SHARD_HEARTBEAT_REFRESH_SECONDS = 10

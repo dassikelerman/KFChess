@@ -3,18 +3,18 @@
 Dispatches by message type, checks the participant's own state (already in a room?
 already authenticated?) before doing anything, and only then delegates straight to a
 GameRoomRegistry, a Matchmaker, or a GameSession. Every message here is already a typed
-object (MoveIntent, RoomIntent, ...) decoded once by ConnectionLifecycle - this class
-never touches a socket, JSON, or a dict.
+object (MoveIntent, CreateRoomIntent, ...) decoded once by ConnectionLifecycle - this
+class never touches a socket, JSON, or a dict.
 """
 
 import logging
 from dataclasses import dataclass
 
 from protocol.game_messages import JumpIntent, MoveIntent
-from protocol.lobby_messages import Login, PlayIntent, RoomIntent
-from protocol.message_types import RoomAction
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login, PlayIntent
 from server.contracts import ParticipantState
 from server.matchmaker import AlreadyQueuedError, MatchFound
+from server.room_directory import AlreadyInRoomError
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +45,10 @@ class ClientMessageRouter:
             return self._route_game_action(participant, message)
         if isinstance(message, PlayIntent):
             return self._route_play_intent(participant)
-        if isinstance(message, RoomIntent):
-            return self._route_room_intent(participant, message)
+        if isinstance(message, CreateRoomIntent):
+            return self._route_create_room_intent(participant)
+        if isinstance(message, JoinRoomIntent):
+            return self._route_join_room_intent(participant, message.join_code)
         self._reject(participant, f"unrecognized message type {type(message).__name__!r}")
 
     def _route_login(self, participant):
@@ -81,19 +83,28 @@ class ClientMessageRouter:
         else:
             participant.state = ParticipantState.SEARCHING
 
-    def _route_room_intent(self, participant, message):
+    def _route_create_room_intent(self, participant):
         if participant.state is ParticipantState.IN_ROOM:
             self._reject(participant, "already in a room")
-        if message.action is RoomAction.CREATE:
+        try:
             return self._game_room_registry.create_private_room(participant)
-        return self._route_room_join(participant, message.room_id)
+        except AlreadyInRoomError:
+            self._reject(participant, "already in a room")
 
-    def _route_room_join(self, participant, room_id):
-        placement = self._game_room_registry.join_private_room(participant, room_id)
+    def _route_join_room_intent(self, participant, join_code):
+        if participant.state is ParticipantState.IN_ROOM:
+            self._reject(participant, "already in a room")
+        try:
+            return self._route_room_join(participant, join_code)
+        except AlreadyInRoomError:
+            self._reject(participant, "already in a room")
+
+    def _route_room_join(self, participant, join_code):
+        placement = self._game_room_registry.join_private_room(participant, join_code)
         if placement is None:
             logger.warning(
-                "room join rejected: connection_id=%s username=%s room_id=%s reason=unknown room",
-                participant.connection_id, participant.username, room_id,
+                "room join rejected: connection_id=%s username=%s join_code=%s reason=unknown room",
+                participant.connection_id, participant.username, join_code,
             )
             return RoomPlacementRejected(reason="unknown room")
         return placement

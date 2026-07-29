@@ -17,12 +17,8 @@ class MessageType(StrEnum):
     LOGIN = "Login"
     LOGGED_IN = "LoggedIn"
     PLAY_INTENT = "PlayIntent"
-    ROOM_INTENT = "RoomIntent"
+    CREATE_ROOM_INTENT = "CreateRoomIntent"
+    JOIN_ROOM_INTENT = "JoinRoomIntent"
     ROOM_REJECTED = "RoomRejected"
     MATCH_NOT_FOUND = "MatchNotFound"
     ROLE_ASSIGNED = "RoleAssigned"
-
-
-class RoomAction(StrEnum):
-    CREATE = "create"
-    JOIN = "join"

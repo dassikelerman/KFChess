@@ -3,17 +3,18 @@ import json
 
 import pytest
 
-from protocol.lobby_messages import Login, RoomIntent
-from protocol.message_types import RoomAction
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login
 from protocol.registry import message_to_payload
 from server.client_message_router import ClientMessageRouter
 from server.connection_lifecycle import ConnectionLifecycle
 from server.contracts import Participant, ParticipantState
 from server.rating import RatingStore
+from server.room_directory import RoomDirectory
 from server.rooms import GameRoomRegistry
 from server.matchmaker import Matchmaker
 from server.user_store import UserStore
 from tests.db_helpers import reset_users_table
+from tests.redis_helpers import flush_directory
 
 
 class FakeConnection:
@@ -163,7 +164,8 @@ def _make_real_lifecycle(user_store, rating_store):
     def send_fn(connection, payload):
         sent.append((connection, payload))
 
-    game_room_registry = GameRoomRegistry(send_fn, rating_store)
+    flush_directory()
+    game_room_registry = GameRoomRegistry(send_fn, rating_store, RoomDirectory("test-shard"))
     router = ClientMessageRouter(game_room_registry, Matchmaker())
     disconnect_calls = []
 
@@ -181,7 +183,7 @@ def test_create_room_sequence_receives_role_then_snapshot_in_order():
         lifecycle, _, _ = _make_real_lifecycle(user_store, rating_store)
         connection = FakeConnection([
             _login_message("alice"),
-            json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))),
+            json.dumps(message_to_payload(CreateRoomIntent())),
         ])
 
         await lifecycle.run(connection)
@@ -201,7 +203,7 @@ def test_join_with_an_unknown_room_id_receives_room_rejected_and_stays_in_lobby(
         lifecycle, _, disconnect_calls = _make_real_lifecycle(user_store, rating_store)
         connection = FakeConnection([
             _login_message("alice"),
-            json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id="no-such-room"))),
+            json.dumps(message_to_payload(JoinRoomIntent(join_code="no-such-code"))),
         ])
 
         await lifecycle.run(connection)
@@ -218,12 +220,12 @@ def test_a_second_client_joining_an_existing_room_gets_black_and_the_rooms_real_
     async def scenario():
         user_store, rating_store = _make_stores()
         lifecycle, game_room_registry, _ = _make_real_lifecycle(user_store, rating_store)
-        creator_client = Participant(connection="creator-conn")
+        creator_client = Participant(connection="creator-conn", username="creator")
         placement = game_room_registry.create_private_room(creator_client)
 
         second_connection = FakeConnection([
             _login_message("bob"),
-            json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=placement.room_id))),
+            json.dumps(message_to_payload(JoinRoomIntent(join_code=placement.join_code))),
         ])
 
         await lifecycle.run(second_connection)

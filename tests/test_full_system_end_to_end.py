@@ -4,14 +4,14 @@ import json
 import websockets
 
 import server.ws_server as ws_server
-from protocol.message_types import RoomAction
 from protocol.game_messages import MoveIntent
-from protocol.lobby_messages import Login, PlayIntent, RoomIntent
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login, PlayIntent
 from protocol.registry import message_to_payload
 from model.position import Position
 from server.rating import RatingStore
 from server.user_store import UserStore
 from tests.db_helpers import reset_users_table
+from tests.redis_helpers import flush_directory
 
 RECV_TIMEOUT_S = 5
 CLIENT_CLOSE_TIMEOUT_S = 2
@@ -58,14 +58,14 @@ def _piece_at(snapshot_payload, row, col):
 
 
 async def _create_private_room(connection):
-    await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
+    await connection.send(json.dumps(message_to_payload(CreateRoomIntent())))
     role_assigned = await _expect(connection, "RoleAssigned")
     snapshot = await _expect(connection, "GameSnapshot")
-    return role_assigned["room_id"], snapshot
+    return role_assigned["join_code"], snapshot
 
 
-async def _join_private_room(connection, room_id):
-    await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
+async def _join_private_room(connection, join_code):
+    await connection.send(json.dumps(message_to_payload(JoinRoomIntent(join_code=join_code))))
     await _expect(connection, "RoleAssigned")
     return await _expect(connection, "GameSnapshot")
 
@@ -103,6 +103,7 @@ async def _send_move_and_wait_for_landing(sender, watcher, source, destination, 
 def test_concurrent_private_and_matched_rooms_do_not_leak_snapshots_or_events(monkeypatch):
     monkeypatch.setattr(ws_server, "PORT", MULTI_ROOM_PORT)
     reset_users_table()
+    flush_directory()
     monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore())
     monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore())
 
@@ -165,6 +166,7 @@ def test_concurrent_private_and_matched_rooms_do_not_leak_snapshots_or_events(mo
 def test_a_full_realistic_session_ends_in_disconnect_resign_and_rating_updates(monkeypatch):
     monkeypatch.setattr(ws_server, "PORT", FULL_SESSION_PORT)
     reset_users_table()
+    flush_directory()
     monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore())
     monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore())
     monkeypatch.setattr(ws_server, "DISCONNECT_COUNTDOWN_SECONDS", 1)

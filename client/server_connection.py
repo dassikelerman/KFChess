@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import websockets
 
 from protocol.game_messages import JumpIntent, MoveIntent
-from protocol.lobby_messages import Login, PlayIntent, RoomIntent
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login, PlayIntent
 from protocol.message_types import MessageType
 from protocol.registry import encode_json_message, message_from_payload
 
@@ -78,8 +78,11 @@ class ServerConnection:
     def request_jump(self, position):
         self._outbound.put(JumpIntent(position=position))
 
-    def send_room_intent(self, action, room_id=None):
-        self._outbound.put(RoomIntent(action=action, room_id=room_id))
+    def send_create_room_intent(self):
+        self._outbound.put(CreateRoomIntent())
+
+    def send_join_room_intent(self, join_code):
+        self._outbound.put(JoinRoomIntent(join_code=join_code))
 
     def send_play_intent(self):
         self._outbound.put(PlayIntent())

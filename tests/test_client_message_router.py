@@ -4,11 +4,11 @@ import pytest
 
 from model.position import Position
 from protocol.game_messages import JumpIntent, MoveIntent
-from protocol.lobby_messages import LoggedIn, Login, PlayIntent, RoomIntent
-from protocol.message_types import RoomAction
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, LoggedIn, Login, PlayIntent
 from server.client_message_router import ClientMessageRouter, MessageRejected, RoomPlacementRejected
 from server.contracts import Participant, ParticipantState
 from server.matchmaker import AlreadyQueuedError, MatchFound
+from server.room_directory import AlreadyInRoomError
 
 POSITION = Position(0, 0)
 
@@ -142,7 +142,7 @@ def test_a_room_intent_while_already_in_a_room_is_rejected():
     participant = _make_participant(ParticipantState.IN_ROOM)
 
     with pytest.raises(MessageRejected):
-        router.route(participant, RoomIntent(action=RoomAction.CREATE))
+        router.route(participant, CreateRoomIntent())
 
 
 def test_a_play_intent_while_already_in_a_room_is_rejected():
@@ -161,20 +161,20 @@ def test_an_unrecognized_message_type_is_rejected():
         router.route(participant, LoggedIn(username="alice", rating=1200))
 
 
-def test_a_room_intent_to_create_dispatches_to_create_private_room():
+def test_a_create_room_intent_dispatches_to_create_private_room():
     router, game_room_registry, _ = _make_router()
     participant = _make_participant(ParticipantState.LOBBY)
 
-    router.route(participant, RoomIntent(action=RoomAction.CREATE))
+    router.route(participant, CreateRoomIntent())
 
     assert game_room_registry.create_private_room_calls == [participant]
 
 
-def test_a_room_intent_to_join_dispatches_to_join_private_room_with_the_room_id():
+def test_a_join_room_intent_dispatches_to_join_private_room_with_the_join_code():
     router, game_room_registry, _ = _make_router()
     participant = _make_participant(ParticipantState.LOBBY)
 
-    router.route(participant, RoomIntent(action=RoomAction.JOIN, room_id="abc"))
+    router.route(participant, JoinRoomIntent(join_code="abc"))
 
     assert game_room_registry.join_private_room_calls == [(participant, "abc")]
 
@@ -183,20 +183,46 @@ def test_a_room_intent_while_searching_is_allowed_through_to_the_game_room_regis
     router, game_room_registry, _ = _make_router()
     participant = _make_participant(ParticipantState.SEARCHING)
 
-    router.route(participant, RoomIntent(action=RoomAction.CREATE))
+    router.route(participant, CreateRoomIntent())
 
     assert game_room_registry.create_private_room_calls == [participant]
 
 
-def test_a_room_intent_to_join_an_unknown_room_returns_a_room_placement_rejected():
+def test_a_join_room_intent_to_an_unknown_room_returns_a_room_placement_rejected():
     router, game_room_registry, _ = _make_router()
     game_room_registry.join_result = None
     participant = _make_participant(ParticipantState.LOBBY)
 
-    result = router.route(participant, RoomIntent(action=RoomAction.JOIN, room_id="no-such-room"))
+    result = router.route(participant, JoinRoomIntent(join_code="no-such-code"))
 
     assert isinstance(result, RoomPlacementRejected)
     assert result.reason
+
+
+def test_a_create_room_intent_that_conflicts_in_the_directory_is_rejected():
+    router, game_room_registry, _ = _make_router()
+
+    def _raise_already_in_room(participant):
+        raise AlreadyInRoomError(f"{participant.username!r} is already seated in a room")
+
+    game_room_registry.create_private_room = _raise_already_in_room
+    participant = _make_participant(ParticipantState.LOBBY)
+
+    with pytest.raises(MessageRejected):
+        router.route(participant, CreateRoomIntent())
+
+
+def test_a_join_room_intent_that_conflicts_in_the_directory_is_rejected():
+    router, game_room_registry, _ = _make_router()
+
+    def _raise_already_in_room(participant, join_code):
+        raise AlreadyInRoomError(f"{participant.username!r} is already seated in a room")
+
+    game_room_registry.join_private_room = _raise_already_in_room
+    participant = _make_participant(ParticipantState.LOBBY)
+
+    with pytest.raises(MessageRejected):
+        router.route(participant, JoinRoomIntent(join_code="abc"))
 
 
 # -- Play intent: matchmaking dispatch -----------------------------------------

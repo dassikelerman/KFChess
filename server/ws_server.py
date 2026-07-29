@@ -13,6 +13,7 @@ websockets.serve() call, and the loop that measures elapsed time and ticks every
 import asyncio
 import json
 import logging
+import secrets
 import time
 
 import websockets
@@ -26,6 +27,7 @@ from server.connection_lifecycle import ConnectionLifecycle
 from server.contracts import MessageSender, ParticipantState
 from server.matchmaker import Matchmaker
 from server.rating import RatingStore
+from server.room_directory import RoomDirectory
 from server.rooms import GameRoomRegistry
 from server.user_store import UserStore
 
@@ -70,7 +72,14 @@ async def main():
     configure_logging(constants.SERVER_LOG_PATH)
     user_store = UserStore()
     rating_store = RatingStore()
-    room_registry = GameRoomRegistry(_unicast, rating_store, disconnect_countdown_seconds=DISCONNECT_COUNTDOWN_SECONDS)
+    # One random id per process - this step is still a single Game Server, so it never
+    # has to disambiguate itself from another shard yet; see Server_Design.md's Redis
+    # section for what starts using this once there's more than one.
+    game_server_id = secrets.token_hex(8)
+    directory = RoomDirectory(game_server_id)
+    room_registry = GameRoomRegistry(
+        _unicast, rating_store, directory, disconnect_countdown_seconds=DISCONNECT_COUNTDOWN_SECONDS,
+    )
     matchmaker = Matchmaker(expiry_seconds=MATCH_EXPIRY_S)
     router = ClientMessageRouter(room_registry, matchmaker)
 

@@ -9,6 +9,7 @@ from protocol.registry import message_to_payload
 from server.rating import RatingStore
 from server.user_store import UserStore
 from tests.db_helpers import reset_users_table
+from tests.redis_helpers import flush_directory
 
 RECV_TIMEOUT_S = 5
 CLIENT_CLOSE_TIMEOUT_S = 2
@@ -34,6 +35,7 @@ async def _connect(uri):
 def test_two_compatible_players_are_matched_and_a_third_incompatible_player_expires(monkeypatch):
     monkeypatch.setattr(ws_server, "PORT", TEST_PORT)
     reset_users_table()
+    flush_directory()
     shared_user_store = UserStore()
     shared_rating_store = RatingStore()
     monkeypatch.setattr(ws_server, "UserStore", lambda: shared_user_store)

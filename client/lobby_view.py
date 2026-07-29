@@ -12,8 +12,6 @@ import tkinter as tk
 import cv2
 import numpy as np
 
-from protocol.message_types import RoomAction
-
 WINDOW_NAME = "KungFu Chess - Lobby"
 WINDOW_SIZE = (240, 400)
 ROOM_BUTTON = (40, 40, 240, 100)
@@ -43,7 +41,7 @@ def open_room_dialog():
         result[1] = None
         root.destroy()
 
-    tk.Label(root, text="Room ID (leave empty to create):").pack(padx=10, pady=(10, 0))
+    tk.Label(root, text="Join code (leave empty to create):").pack(padx=10, pady=(10, 0))
     entry = tk.Entry(root, textvariable=room_id_var)
     entry.pack(padx=10, pady=5)
     entry.focus_set()
@@ -104,11 +102,11 @@ class LobbyView:
             self._handle_play_click()
 
     def _handle_room_click(self):
-        action, room_id = open_room_dialog()
+        action, join_code = open_room_dialog()
         if action == "create":
-            self._connection.send_room_intent(RoomAction.CREATE)
+            self._connection.send_create_room_intent()
         elif action == "join":
-            self._connection.send_room_intent(RoomAction.JOIN, room_id)
+            self._connection.send_join_room_intent(join_code)
 
     def _handle_play_click(self):
         if self._searching:

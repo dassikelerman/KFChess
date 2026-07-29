@@ -49,23 +49,27 @@ This is an editable install, so code changes take effect immediately with no
 `sys.path` hacks needed. Install only what you need instead of everything:
 
 - `.[client]` - opencv-python + websockets, for running the GUI client
-- `.[server]` - websockets + psycopg2-binary, for running the server
+- `.[server]` - websockets + psycopg2-binary + redis, for running the server
 - `.[dev]` - pytest + pytest-cov, for running the test suite
 
 ## Database
 
 Accounts and ratings live in PostgreSQL (`server/user_store.py`,
-`server/rating.py`), not a local file. Start it with Docker before running
-the server or the test suite:
+`server/rating.py`), not a local file. Room/user/join-code routing metadata
+lives in Redis (`server/room_directory.py`) - never the live game state
+itself, which stays in process memory (see Server_Design.md's Redis
+section). Start both with Docker before running the server or the test
+suite:
 
 ```
 docker compose up -d
 ```
 
-This matches the connection string both stores default to
-(`postgresql://kfchess:kfchess@localhost:5432/kfchess`); override it with
-the `KFCHESS_DATABASE_URL` environment variable if you're pointing at a
-different instance.
+This matches the connection strings both default to
+(`postgresql://kfchess:kfchess@localhost:5432/kfchess` and
+`redis://localhost:6379/0`); override them with the `KFCHESS_DATABASE_URL`
+and `KFCHESS_REDIS_URL` environment variables if you're pointing at
+different instances.
 
 ## Running
 
@@ -78,7 +82,7 @@ python -m view.run                        # local, no-network single-process gam
 ## Running tests
 
 ```
-docker compose up -d   # most of the suite needs the real Postgres instance
+docker compose up -d   # most of the suite needs the real Postgres and Redis instances
 pytest
 ```
 

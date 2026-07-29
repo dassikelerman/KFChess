@@ -3,8 +3,7 @@ import json
 
 import websockets
 
-from protocol.lobby_messages import Login, RoomIntent
-from protocol.message_types import RoomAction
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login
 from protocol.registry import message_to_payload
 from server import ws_server
 
@@ -26,21 +25,21 @@ async def _login(connection, username):
 
 async def _create_room(connection, username):
     await _login(connection, username)
-    await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
+    await connection.send(json.dumps(message_to_payload(CreateRoomIntent())))
     role_message = await _expect(connection, "RoleAssigned")
     assert role_message["role"] == "white", role_message
     await _expect(connection, "GameSnapshot")
     print(f"OK: {username!r} created room {role_message['room_id']!r} and is seated as white")
-    return role_message["room_id"]
+    return role_message["join_code"]
 
 
-async def _join_room(connection, username, room_id, expected_role):
+async def _join_room(connection, username, join_code, expected_role):
     await _login(connection, username)
-    await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
+    await connection.send(json.dumps(message_to_payload(JoinRoomIntent(join_code=join_code))))
     role_message = await _expect(connection, "RoleAssigned")
     assert role_message["role"] == expected_role, role_message
     await _expect(connection, "GameSnapshot")
-    print(f"OK: {username!r} joined room {room_id!r} and is seated as {expected_role!r}")
+    print(f"OK: {username!r} joined room {role_message['room_id']!r} and is seated as {expected_role!r}")
 
 
 async def main():
@@ -52,10 +51,10 @@ async def main():
     client_b = None
     try:
         client_a = await websockets.connect(uri)
-        room_id = await _create_room(client_a, "alice")
+        join_code = await _create_room(client_a, "alice")
 
         client_b = await websockets.connect(uri)
-        await _join_room(client_b, "bob", room_id, "black")
+        await _join_room(client_b, "bob", join_code, "black")
 
         for i in range(BROADCASTS_TO_OBSERVE):
             await _expect(client_a, "GameSnapshot")

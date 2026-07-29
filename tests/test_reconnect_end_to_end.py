@@ -5,12 +5,12 @@ import pytest
 import websockets
 
 import server.ws_server as ws_server
-from protocol.message_types import RoomAction
-from protocol.lobby_messages import Login, RoomIntent
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login
 from protocol.registry import message_to_payload
 from server.rating import RatingStore
 from server.user_store import UserStore
 from tests.db_helpers import reset_users_table
+from tests.redis_helpers import flush_directory
 
 RECV_TIMEOUT_S = 5
 CLIENT_CLOSE_TIMEOUT_S = 2
@@ -44,6 +44,7 @@ async def _login(connection, username):
 def test_reconnecting_with_the_same_username_within_the_grace_window_rejoins_the_room(monkeypatch):
     monkeypatch.setattr(ws_server, "PORT", TEST_PORT)
     reset_users_table()
+    flush_directory()
     monkeypatch.setattr(ws_server, "UserStore", lambda: UserStore())
     monkeypatch.setattr(ws_server, "RatingStore", lambda: RatingStore())
     monkeypatch.setattr(ws_server, "DISCONNECT_COUNTDOWN_SECONDS", 20)
@@ -60,12 +61,14 @@ def test_reconnecting_with_the_same_username_within_the_grace_window_rejoins_the
             await _login(client_a, "alice")
             await _login(client_b, "bob")
 
-            await client_a.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
+            await client_a.send(json.dumps(message_to_payload(CreateRoomIntent())))
             role_a = await _expect(client_a, "RoleAssigned")
             await _expect(client_a, "GameSnapshot")
 
-            room_id = role_a["room_id"]
-            await client_b.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
+            join_code = role_a["join_code"]
+            await client_b.send(
+                json.dumps(message_to_payload(JoinRoomIntent(join_code=join_code))),
+            )
             await _expect(client_b, "RoleAssigned")
             await _expect(client_b, "GameSnapshot")
 
@@ -75,7 +78,7 @@ def test_reconnecting_with_the_same_username_within_the_grace_window_rejoins_the
             assert disconnected["color"] == "w"
 
             # alice logs back in on a brand new connection, still inside the 20s grace window -
-            # the server should push her straight back into her old seat, no RoomIntent/PlayIntent needed.
+            # the server should push her straight back into her old seat, no room/play intent needed.
             client_a2 = await websockets.connect(uri, close_timeout=CLIENT_CLOSE_TIMEOUT_S)
             await _login(client_a2, "alice")
             role = await _expect(client_a2, "RoleAssigned")

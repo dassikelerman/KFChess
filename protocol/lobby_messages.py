@@ -6,7 +6,7 @@ game - see game_messages.py for the in-game MoveIntent/JumpIntent.
 
 from dataclasses import dataclass
 
-from protocol.message_types import MessageType, RoomAction
+from protocol.message_types import MessageType
 from protocol.registry import register
 
 
@@ -32,9 +32,15 @@ class PlayIntent:
 
 
 @dataclass(frozen=True)
-class RoomIntent:
-    action: RoomAction
-    room_id: str | None = None
+class CreateRoomIntent:
+    pass
+
+
+@dataclass(frozen=True)
+class JoinRoomIntent:
+    # The short, human-typed join code shown to a private room's creator - not the
+    # room's internal id (see server/room_directory.py).
+    join_code: str
 
 
 @dataclass(frozen=True)
@@ -51,6 +57,8 @@ class MatchNotFound:
 class RoleAssigned:
     role: str
     room_id: str
+    # Only set for a private room's creator - the code to hand to whoever should join.
+    join_code: str | None = None
 
 
 def _login_fields(login):
@@ -77,19 +85,23 @@ def _play_intent_kwargs(data):
     return {}
 
 
-def _room_intent_fields(intent):
-    return {"action": intent.action.value, "room_id": intent.room_id}
+def _create_room_intent_fields(intent):
+    return {}
 
 
-def _room_intent_kwargs(data):
-    action = RoomAction(data["action"])
-    if action is RoomAction.JOIN:
-        room_id = (data.get("room_id") or "").strip()
-        if not room_id:
-            raise InvalidRoomIntentError("RoomIntent(action=join) requires a non-empty room_id")
-        return dict(action=action, room_id=room_id)
-    # CREATE never needs a room_id - the server assigns one - so any room_id sent alongside it is ignored.
-    return dict(action=action, room_id=None)
+def _create_room_intent_kwargs(data):
+    return {}
+
+
+def _join_room_intent_fields(intent):
+    return {"join_code": intent.join_code}
+
+
+def _join_room_intent_kwargs(data):
+    join_code = (data.get("join_code") or "").strip()
+    if not join_code:
+        raise InvalidRoomIntentError("JoinRoomIntent requires a non-empty join_code")
+    return dict(join_code=join_code)
 
 
 def _room_rejected_fields(message):
@@ -109,17 +121,18 @@ def _match_not_found_kwargs(data):
 
 
 def _role_assigned_fields(message):
-    return {"role": message.role, "room_id": message.room_id}
+    return {"role": message.role, "room_id": message.room_id, "join_code": message.join_code}
 
 
 def _role_assigned_kwargs(data):
-    return dict(role=data["role"], room_id=data["room_id"])
+    return dict(role=data["role"], room_id=data["room_id"], join_code=data.get("join_code"))
 
 
 register(MessageType.LOGIN, Login, _login_fields, _login_kwargs)
 register(MessageType.LOGGED_IN, LoggedIn, _logged_in_fields, _logged_in_kwargs)
 register(MessageType.PLAY_INTENT, PlayIntent, _play_intent_fields, _play_intent_kwargs)
-register(MessageType.ROOM_INTENT, RoomIntent, _room_intent_fields, _room_intent_kwargs)
+register(MessageType.CREATE_ROOM_INTENT, CreateRoomIntent, _create_room_intent_fields, _create_room_intent_kwargs)
+register(MessageType.JOIN_ROOM_INTENT, JoinRoomIntent, _join_room_intent_fields, _join_room_intent_kwargs)
 register(MessageType.ROOM_REJECTED, RoomRejected, _room_rejected_fields, _room_rejected_kwargs)
 register(MessageType.MATCH_NOT_FOUND, MatchNotFound, _match_not_found_fields, _match_not_found_kwargs)
 register(MessageType.ROLE_ASSIGNED, RoleAssigned, _role_assigned_fields, _role_assigned_kwargs)

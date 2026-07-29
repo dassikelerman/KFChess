@@ -10,8 +10,10 @@ import pytest
 
 import server.ws_server as ws_server
 from server.rating import RatingStore
+from server.room_directory import RoomDirectory
 from server.rooms import GameRoomRegistry
 from server.session import GameSession
+from tests.redis_helpers import flush_directory
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -39,7 +41,8 @@ def test_kf_chess_is_installed_as_a_package_not_found_via_sys_path():
 
 
 def test_game_room_registry_has_no_per_room_task_bookkeeping():
-    registry = GameRoomRegistry(lambda connection, payload: None, RatingStore())
+    flush_directory()
+    registry = GameRoomRegistry(lambda connection, payload: None, RatingStore(), RoomDirectory("test-shard"))
     assert not hasattr(registry, "_game_loop_tasks_by_room_id")
     assert hasattr(registry, "tick")
 
