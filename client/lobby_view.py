@@ -8,6 +8,7 @@ in client/home_screen.py.
 """
 
 import tkinter as tk
+from enum import StrEnum
 
 import cv2
 import numpy as np
@@ -18,8 +19,14 @@ ROOM_BUTTON = (40, 40, 240, 100)
 PLAY_BUTTON = (40, 120, 240, 180)
 
 
+class RoomDialogAction(StrEnum):
+    CREATE = "create"
+    JOIN = "join"
+    CANCEL = "cancel"
+
+
 def open_room_dialog():
-    result = ["cancel", None]
+    result = [RoomDialogAction.CANCEL, None]
 
     root = tk.Tk()
     root.title("Room")
@@ -27,17 +34,17 @@ def open_room_dialog():
     room_id_var = tk.StringVar()
 
     def _create():
-        result[0] = "create"
+        result[0] = RoomDialogAction.CREATE
         result[1] = None
         root.destroy()
 
     def _join():
-        result[0] = "join"
+        result[0] = RoomDialogAction.JOIN
         result[1] = room_id_var.get().strip()
         root.destroy()
 
     def _cancel():
-        result[0] = "cancel"
+        result[0] = RoomDialogAction.CANCEL
         result[1] = None
         root.destroy()
 
@@ -103,9 +110,9 @@ class LobbyView:
 
     def _handle_room_click(self):
         action, join_code = open_room_dialog()
-        if action == "create":
+        if action is RoomDialogAction.CREATE:
             self._connection.send_create_room_intent()
-        elif action == "join":
+        elif action is RoomDialogAction.JOIN:
             self._connection.send_join_room_intent(join_code)
 
     def _handle_play_click(self):

@@ -1,9 +1,11 @@
 """ClientMessageRouter: choose which application component handles a typed message.
 
-Dispatches by message type, checks the participant's own state (already in a room?
-already authenticated?) before doing anything, and only then delegates straight to a
-GameRoomRegistry, a Matchmaker, or a GameSession. Every message here is already a typed
-object (MoveIntent, CreateRoomIntent, ...) decoded once by ConnectionLifecycle - this
+Dispatches by exact type(message) through a handler registry built once in __init__ -
+one entry per supported message class, mapping straight to the existing private handler
+method for it (MoveIntent and JumpIntent share one, since both are in-game actions).
+Checks the participant's own state (already in a room? already authenticated?) before
+doing anything, then delegates to a GameRoomRegistry, a Matchmaker, or a GameSession.
+Every message here is already a typed object decoded once by ConnectionLifecycle - this
 class never touches a socket, JSON, or a dict.
 """
 
@@ -34,24 +36,29 @@ class ClientMessageRouter:
     def __init__(self, game_room_registry, matchmaker):
         self._game_room_registry = game_room_registry
         self._matchmaker = matchmaker
+        # One entry per supported message class -> its existing handler method. Built
+        # once here (not as a class attribute) since each value is a bound method of
+        # this instance.
+        self._handlers_by_type = {
+            Login: self._route_login,
+            MoveIntent: self._route_game_action,
+            JumpIntent: self._route_game_action,
+            PlayIntent: self._route_play_intent,
+            CreateRoomIntent: self._route_create_room_intent,
+            JoinRoomIntent: self._route_join_room_intent,
+        }
 
     def try_reconnect(self, participant):
         return self._game_room_registry.try_reconnect(participant)
 
     def route(self, participant, message):
-        if isinstance(message, Login):
-            return self._route_login(participant)
-        if isinstance(message, (MoveIntent, JumpIntent)):
-            return self._route_game_action(participant, message)
-        if isinstance(message, PlayIntent):
-            return self._route_play_intent(participant)
-        if isinstance(message, CreateRoomIntent):
-            return self._route_create_room_intent(participant)
-        if isinstance(message, JoinRoomIntent):
-            return self._route_join_room_intent(participant, message.join_code)
-        self._reject(participant, f"unrecognized message type {type(message).__name__!r}")
+        handler = self._handlers_by_type.get(type(message))
+        if handler is None:
+            self._reject(participant, f"unrecognized message type {type(message).__name__!r}")
+        else:
+            return handler(participant, message)
 
-    def _route_login(self, participant):
+    def _route_login(self, participant, message):
         if participant.authenticated:
             self._reject(participant, "already authenticated")
 
@@ -69,7 +76,7 @@ class ClientMessageRouter:
         else:
             session.handle_jump(participant.connection, message)
 
-    def _route_play_intent(self, participant):
+    def _route_play_intent(self, participant, message):
         if participant.state is ParticipantState.IN_ROOM:
             self._reject(participant, "already in a room")
         try:
@@ -83,7 +90,7 @@ class ClientMessageRouter:
         else:
             participant.state = ParticipantState.SEARCHING
 
-    def _route_create_room_intent(self, participant):
+    def _route_create_room_intent(self, participant, message):
         if participant.state is ParticipantState.IN_ROOM:
             self._reject(participant, "already in a room")
         try:
@@ -91,11 +98,11 @@ class ClientMessageRouter:
         except AlreadyInRoomError:
             self._reject(participant, "already in a room")
 
-    def _route_join_room_intent(self, participant, join_code):
+    def _route_join_room_intent(self, participant, message):
         if participant.state is ParticipantState.IN_ROOM:
             self._reject(participant, "already in a room")
         try:
-            return self._route_room_join(participant, join_code)
+            return self._route_room_join(participant, message.join_code)
         except AlreadyInRoomError:
             self._reject(participant, "already in a room")
 

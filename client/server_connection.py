@@ -23,6 +23,7 @@ from protocol.game_messages import JumpIntent, MoveIntent
 from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login, PlayIntent
 from protocol.message_types import MessageType
 from protocol.registry import encode_json_message, message_from_payload
+from protocol.snapshot_codec import CLOCK_MS_FIELD
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,7 @@ class ServerConnection:
         data = json.loads(raw)
         message_type = data.get("type")
         if message_type == MessageType.GAME_SNAPSHOT:
-            clock_ms = data.pop("clock_ms")
+            clock_ms = data.pop(CLOCK_MS_FIELD)
             game_snapshot = message_from_payload(data)
             self.inbound.put(SnapshotReceived(game_snapshot=game_snapshot, clock_ms=clock_ms))
         else:

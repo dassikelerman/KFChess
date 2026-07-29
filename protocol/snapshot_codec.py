@@ -78,8 +78,14 @@ def _game_snapshot_kwargs(data):
 
 register(MessageType.GAME_SNAPSHOT, GameSnapshot, _game_snapshot_fields, _game_snapshot_kwargs)
 
+# clock_ms rides alongside the snapshot's own registered fields, not as one of them -
+# GameSnapshot itself has no clock_ms attribute (see engine/snapshot.py), so it can't go
+# through _game_snapshot_fields/_game_snapshot_kwargs like the rest of the payload. This
+# is the one place that key name is spelled out; every reader imports it from here.
+CLOCK_MS_FIELD = "clock_ms"
+
 
 def snapshot_to_payload(snapshot, clock_ms):
     payload = message_to_payload(snapshot)
-    payload["clock_ms"] = clock_ms
+    payload[CLOCK_MS_FIELD] = clock_ms
     return payload

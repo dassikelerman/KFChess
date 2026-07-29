@@ -36,7 +36,7 @@ from protocol.registry import (
     message_from_payload,
     message_to_payload,
 )
-from protocol.snapshot_codec import snapshot_to_payload
+from protocol.snapshot_codec import CLOCK_MS_FIELD, snapshot_to_payload
 
 AT = Position(1, 2)
 
@@ -154,16 +154,16 @@ def test_snapshot_to_payload_returns_the_snapshots_payload_form_plus_the_clock()
     payload = snapshot_to_payload(SNAPSHOT, clock_ms=1234)
 
     expected = message_to_payload(SNAPSHOT)
-    expected["clock_ms"] = 1234
+    expected[CLOCK_MS_FIELD] = 1234
     assert payload == expected
     assert payload["type"] == "GameSnapshot"
-    assert payload["clock_ms"] == 1234
+    assert payload[CLOCK_MS_FIELD] == 1234
 
 
 def test_snapshot_to_payload_does_not_mutate_the_snapshot():
     snapshot_to_payload(SNAPSHOT, clock_ms=1234)
     assert message_to_payload(SNAPSHOT) == message_to_payload(SNAPSHOT)  # unaffected by the call above
-    assert "clock_ms" not in message_to_payload(SNAPSHOT)
+    assert CLOCK_MS_FIELD not in message_to_payload(SNAPSHOT)
 
 
 def test_snapshot_to_payload_is_json_serializable():

@@ -80,6 +80,57 @@ def test_client_message_router_class_has_no_json_or_websocket_specific_dependenc
     assert "websockets" not in source
 
 
+@pytest.mark.parametrize(
+    "message_type, handler_name",
+    [
+        (Login, "_route_login"),
+        (MoveIntent, "_route_game_action"),
+        (JumpIntent, "_route_game_action"),
+        (PlayIntent, "_route_play_intent"),
+        (CreateRoomIntent, "_route_create_room_intent"),
+        (JoinRoomIntent, "_route_join_room_intent"),
+    ],
+)
+def test_every_supported_message_type_is_registered_to_its_own_handler(message_type, handler_name):
+    router, _, _ = _make_router()
+
+    assert router._handlers_by_type[message_type] == getattr(router, handler_name)
+
+
+def test_the_handler_registry_covers_exactly_the_supported_message_types():
+    router, _, _ = _make_router()
+
+    assert set(router._handlers_by_type) == {
+        Login, MoveIntent, JumpIntent, PlayIntent, CreateRoomIntent, JoinRoomIntent,
+    }
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        Login(username="alice", password="hunter2"),
+        MoveIntent(source=POSITION, destination=POSITION),
+        JumpIntent(position=POSITION),
+        PlayIntent(),
+        CreateRoomIntent(),
+        JoinRoomIntent(join_code="abc"),
+    ],
+    ids=lambda m: type(m).__name__,
+)
+def test_route_dispatches_every_supported_message_type_without_raising_unrecognized(message):
+    # A message type this router doesn't know about raises MessageRejected with an
+    # "unrecognized message type" reason (see test_an_unrecognized_message_type_is_
+    # rejected below) - none of the genuinely supported types should ever hit that path,
+    # regardless of what the participant's state does to the handler's own behavior.
+    router, _, _ = _make_router()
+    participant = _make_participant(ParticipantState.LOBBY, authenticated=False)
+
+    try:
+        router.route(participant, message)
+    except MessageRejected as rejection:
+        assert "unrecognized message type" not in rejection.reason
+
+
 def test_a_second_login_after_authentication_is_rejected():
     router, _, _ = _make_router()
     participant = _make_participant(ParticipantState.LOBBY, authenticated=True)
@@ -157,7 +208,7 @@ def test_an_unrecognized_message_type_is_rejected():
     router, _, _ = _make_router()
     participant = _make_participant(ParticipantState.LOBBY)
 
-    with pytest.raises(MessageRejected):
+    with pytest.raises(MessageRejected, match="unrecognized message type 'LoggedIn'"):
         router.route(participant, LoggedIn(username="alice", rating=1200))
 
 
