@@ -1,27 +1,17 @@
-"""RoomDirectory: Redis-backed room/user/join-code routing metadata.
+"""RoomDirectory: Redis-backed room/user/join-code routing metadata - never the live
+game state itself (GameSession, connections, Participants stay local to whichever
+Game Server process hosts them; see server/rooms.py).
 
-Three mappings, all pure routing/discovery metadata - never the live game state itself
-(GameSession, connections, Participants all stay local to whichever Game Server process
-actually hosts them; see server/rooms.py):
+Creating a room writes multiple keys at once (room, one per seated username, and a
+join code for private rooms) through a Lua script, since a partial write would leave
+a username falsely marked "in a room" with no room to match. Deleting doesn't need
+one: a partial delete only leaves a dangling pointer, which every lookup here already
+treats as "gone".
 
-    directory:room:{room_id}   -> game_server_id   (which shard hosts this room)
-    directory:user:{username}  -> room_id           (which room, if any, a user occupies)
-    directory:join:{join_code} -> room_id           (a private room's human-typable code)
-
-Each entry is written once at creation and removed once at _close_room - none of them
-is ever updated in place. Creating a room touches more than one key at once (the room
-entry plus one entry per seated username, and a join code for private rooms) and a
-partial write there would leave a username falsely marked "in a room" with no room to
-match - so those writes go through a Lua script, atomic because Redis executes it as a
-single, uninterruptible unit. Deleting is different: a partial delete only ever leaves
-a dangling pointer that fails safe (a lookup against a half-deleted room correctly
-reports "gone"), so plain multi-key DEL is enough - no script needed there.
-
-Refreshing a TTL per room/user would be O(rooms), which the numbers in Server_Design.md
-rule out. Instead, each Game Server process refreshes one heartbeat key for itself -
-O(shards). Room/user/join-code entries get a long, one-time TTL as a last-resort
-backstop only; the real staleness signal is whether the shard they point to is still
-heartbeating, checked lazily by whichever lookup discovers a dead one.
+Per-entry TTL refresh would be O(rooms) - ruled out by the numbers in
+Server_Design.md - so each Game Server process refreshes one heartbeat key for
+itself instead (O(shards)). Entries carry a long TTL only as a last-resort backstop;
+the real staleness check is whether the shard a lookup resolves to is still alive.
 """
 
 import logging
@@ -56,14 +46,9 @@ def _shard_key(game_server_id):
     return f"directory:shard:{game_server_id}:alive"
 
 
-# KEYS[1 .. n_identifiers] = room key, and (for a private room) the join-code key -
-# collide => retry with a fresh random value. KEYS[n_identifiers+1 ..] = one entry per
-# username to claim for room_id - collide => that user is genuinely seated elsewhere,
-# do not retry. n_identifiers (1 or 2) is passed explicitly in ARGV[1] rather than
-# padding KEYS with a placeholder key for "no join code": there is no such thing as an
-# empty-string key here, only a KEYS list that is actually one or two entries long.
-# ARGV[2] = game_server_id, ARGV[3] = room_id, ARGV[4] = ttl_seconds. All-or-nothing -
-# nothing is written unless every check passes.
+# n_identifiers is passed explicitly (ARGV[1]) instead of padding KEYS with a
+# placeholder for "no join code" - there's no such thing as an empty-string key,
+# only a KEYS list that's actually one or two entries long.
 _RESERVE_NEW_ROOM_SCRIPT = """
 local n_identifiers = tonumber(ARGV[1])
 local ttl = tonumber(ARGV[4])
@@ -89,10 +74,8 @@ end
 return 'ok'
 """
 
-# KEYS[1] = join-code key, KEYS[2] = joining username's key. ARGV[1] = ttl_seconds.
-# Resolves the join code, confirms the room it points to still exists, and only then
-# claims the username - all inside one atomic step so a room closing mid-lookup can't
-# leave the joiner claimed against a room that no longer exists.
+# One atomic step so a room closing mid-lookup can't leave the joiner claimed
+# against a room that no longer exists.
 _RESERVE_JOIN_SCRIPT = """
 local join_key = KEYS[1]
 local user_key = KEYS[2]
