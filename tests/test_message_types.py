@@ -1,4 +1,4 @@
-from protocol.message_types import MessageType, RoomAction
+from protocol.message_types import MessageType
 
 
 def test_message_type_values_match_the_wire_tags_already_in_use():
@@ -20,12 +20,8 @@ def test_message_type_values_match_the_wire_tags_already_in_use():
 def test_message_type_values_for_the_new_lobby_and_matchmaking_messages():
     assert MessageType.LOGGED_IN == "LoggedIn"
     assert MessageType.PLAY_INTENT == "PlayIntent"
-    assert MessageType.ROOM_INTENT == "RoomIntent"
+    assert MessageType.CREATE_ROOM_INTENT == "CreateRoomIntent"
+    assert MessageType.JOIN_ROOM_INTENT == "JoinRoomIntent"
     assert MessageType.ROOM_REJECTED == "RoomRejected"
     assert MessageType.MATCH_NOT_FOUND == "MatchNotFound"
     assert MessageType.ROLE_ASSIGNED == "RoleAssigned"
-
-
-def test_room_action_values():
-    assert RoomAction.CREATE == "create"
-    assert RoomAction.JOIN == "join"

@@ -5,6 +5,7 @@ from engine.snapshot import GameSnapshot, PieceSnapshot
 from events.game_events import CaptureEvent, MoveCompletedEvent
 from protocol.lobby_messages import RoleAssigned
 from protocol.registry import message_to_payload
+from protocol.snapshot_codec import snapshot_to_payload
 from model.piece import PieceColor, PieceKind
 from model.position import Position
 
@@ -32,8 +33,7 @@ def make_snapshot():
 def test_a_snapshot_message_is_decoded_and_tagged_snapshot():
     client = make_client()
     snapshot = make_snapshot()
-    payload = message_to_payload(snapshot)
-    payload["clock_ms"] = 4200
+    payload = snapshot_to_payload(snapshot, clock_ms=4200)
     raw = json.dumps(payload)
 
     client._handle_message(raw)
@@ -89,8 +89,7 @@ def test_a_role_assigned_message_decodes_through_the_generic_event_path():
 def test_multiple_messages_queue_in_order():
     client = make_client()
     snapshot = make_snapshot()
-    snapshot_payload = message_to_payload(snapshot)
-    snapshot_payload["clock_ms"] = 10
+    snapshot_payload = snapshot_to_payload(snapshot, clock_ms=10)
     event = MoveCompletedEvent(
         piece_id="p1", piece_kind=PieceKind.ROOK, piece_color=PieceColor.WHITE,
         destination=AT, at_ms=100,
@@ -110,8 +109,7 @@ def test_the_servers_actual_connection_sequence_decodes_cleanly():
     # new connection - both must decode without error, in that order.
     client = make_client()
     snapshot = make_snapshot()
-    snapshot_payload = message_to_payload(snapshot)
-    snapshot_payload["clock_ms"] = 0
+    snapshot_payload = snapshot_to_payload(snapshot, clock_ms=0)
 
     client._handle_message(json.dumps(message_to_payload(RoleAssigned(role="white", room_id="room-1"))))
     client._handle_message(json.dumps(snapshot_payload))

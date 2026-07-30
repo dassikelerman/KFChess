@@ -18,16 +18,16 @@ from model.piece import PieceColor, PieceKind
 from model.position import Position
 from protocol.game_messages import JumpIntent, MoveIntent
 from protocol.lobby_messages import (
+    CreateRoomIntent,
     InvalidRoomIntentError,
+    JoinRoomIntent,
     LoggedIn,
     Login,
     MatchNotFound,
     PlayIntent,
     RoleAssigned,
-    RoomIntent,
     RoomRejected,
 )
-from protocol.message_types import RoomAction
 from protocol.registry import (
     UnknownMessageTypeError,
     UnregisteredMessageClassError,
@@ -36,7 +36,7 @@ from protocol.registry import (
     message_from_payload,
     message_to_payload,
 )
-from protocol.snapshot_codec import snapshot_to_payload
+from protocol.snapshot_codec import CLOCK_MS_FIELD, snapshot_to_payload
 
 AT = Position(1, 2)
 
@@ -93,8 +93,8 @@ SAMPLES = [
     Login(username="alice", password="hunter2"),
     LoggedIn(username="alice", rating=1200),
     PlayIntent(),
-    RoomIntent(action=RoomAction.CREATE),
-    RoomIntent(action=RoomAction.JOIN, room_id="room-1"),
+    CreateRoomIntent(),
+    JoinRoomIntent(join_code="ABC123"),
     RoomRejected(reason="room_full"),
     MatchNotFound(),
     MatchNotFound(reason="opponent_declined"),
@@ -153,42 +153,37 @@ def test_snapshot_to_payload_returns_the_snapshots_payload_form_plus_the_clock()
     payload = snapshot_to_payload(SNAPSHOT, clock_ms=1234)
 
     expected = message_to_payload(SNAPSHOT)
-    expected["clock_ms"] = 1234
+    expected[CLOCK_MS_FIELD] = 1234
     assert payload == expected
     assert payload["type"] == "GameSnapshot"
-    assert payload["clock_ms"] == 1234
+    assert payload[CLOCK_MS_FIELD] == 1234
 
 
 def test_snapshot_to_payload_does_not_mutate_the_snapshot():
     snapshot_to_payload(SNAPSHOT, clock_ms=1234)
     assert message_to_payload(SNAPSHOT) == message_to_payload(SNAPSHOT)  # unaffected by the call above
-    assert "clock_ms" not in message_to_payload(SNAPSHOT)
+    assert CLOCK_MS_FIELD not in message_to_payload(SNAPSHOT)
 
 
 def test_snapshot_to_payload_is_json_serializable():
     json.dumps(snapshot_to_payload(SNAPSHOT, clock_ms=1234))  # must not raise
 
 
-def test_a_room_intent_to_join_with_an_empty_room_id_is_rejected():
-    payload = message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=""))
+def test_a_join_room_intent_with_an_empty_join_code_is_rejected():
+    payload = message_to_payload(JoinRoomIntent(join_code=""))
     with pytest.raises(InvalidRoomIntentError):
         message_from_payload(payload)
 
 
-def test_a_room_intent_to_join_with_a_whitespace_only_room_id_is_rejected():
-    payload = message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id="   "))
+def test_a_join_room_intent_with_a_whitespace_only_join_code_is_rejected():
+    payload = message_to_payload(JoinRoomIntent(join_code="   "))
     with pytest.raises(InvalidRoomIntentError):
         message_from_payload(payload)
 
 
-def test_a_room_intent_to_join_normalizes_a_padded_room_id():
-    payload = message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id="  abc  "))
-    assert message_from_payload(payload) == RoomIntent(action=RoomAction.JOIN, room_id="abc")
-
-
-def test_a_room_intent_to_create_ignores_an_extraneous_room_id():
-    payload = message_to_payload(RoomIntent(action=RoomAction.CREATE, room_id="some-id"))
-    assert message_from_payload(payload) == RoomIntent(action=RoomAction.CREATE, room_id=None)
+def test_a_join_room_intent_normalizes_a_padded_join_code():
+    payload = message_to_payload(JoinRoomIntent(join_code="  abc  "))
+    assert message_from_payload(payload) == JoinRoomIntent(join_code="abc")
 
 
 def test_an_unknown_type_raises_a_clear_error_not_a_bare_key_error():

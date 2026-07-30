@@ -3,8 +3,7 @@ import json
 
 import pytest
 
-from protocol.lobby_messages import Login, RoomIntent
-from protocol.message_types import RoomAction
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login
 from protocol.registry import message_to_payload
 from server.client_message_router import ClientMessageRouter
 from server.connection_lifecycle import ConnectionLifecycle
@@ -181,7 +180,7 @@ def test_create_room_sequence_receives_role_then_snapshot_in_order():
         lifecycle, _, _ = _make_real_lifecycle(user_store, rating_store)
         connection = FakeConnection([
             _login_message("alice"),
-            json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))),
+            json.dumps(message_to_payload(CreateRoomIntent())),
         ])
 
         await lifecycle.run(connection)
@@ -201,7 +200,7 @@ def test_join_with_an_unknown_room_id_receives_room_rejected_and_stays_in_lobby(
         lifecycle, _, disconnect_calls = _make_real_lifecycle(user_store, rating_store)
         connection = FakeConnection([
             _login_message("alice"),
-            json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id="no-such-room"))),
+            json.dumps(message_to_payload(JoinRoomIntent(join_code="no-such-room"))),
         ])
 
         await lifecycle.run(connection)
@@ -223,7 +222,7 @@ def test_a_second_client_joining_an_existing_room_gets_black_and_the_rooms_real_
 
         second_connection = FakeConnection([
             _login_message("bob"),
-            json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=placement.room_id))),
+            json.dumps(message_to_payload(JoinRoomIntent(join_code=placement.room_id))),
         ])
 
         await lifecycle.run(second_connection)

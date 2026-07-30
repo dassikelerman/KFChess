@@ -4,9 +4,8 @@ import json
 import websockets
 
 import server.ws_server as ws_server
-from protocol.message_types import RoomAction
 from protocol.game_messages import MoveIntent
-from protocol.lobby_messages import Login, PlayIntent, RoomIntent
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login, PlayIntent
 from protocol.registry import message_to_payload
 from model.position import Position
 from server.rating import RatingStore
@@ -58,14 +57,14 @@ def _piece_at(snapshot_payload, row, col):
 
 
 async def _create_private_room(connection):
-    await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
+    await connection.send(json.dumps(message_to_payload(CreateRoomIntent())))
     role_assigned = await _expect(connection, "RoleAssigned")
     snapshot = await _expect(connection, "GameSnapshot")
     return role_assigned["room_id"], snapshot
 
 
 async def _join_private_room(connection, room_id):
-    await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
+    await connection.send(json.dumps(message_to_payload(JoinRoomIntent(join_code=room_id))))
     await _expect(connection, "RoleAssigned")
     return await _expect(connection, "GameSnapshot")
 

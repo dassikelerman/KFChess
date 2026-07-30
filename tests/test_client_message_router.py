@@ -4,8 +4,7 @@ import pytest
 
 from model.position import Position
 from protocol.game_messages import JumpIntent, MoveIntent
-from protocol.lobby_messages import LoggedIn, Login, PlayIntent, RoomIntent
-from protocol.message_types import RoomAction
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, LoggedIn, Login, PlayIntent
 from server.client_message_router import ClientMessageRouter, MessageRejected, RoomPlacementRejected
 from server.contracts import Participant, ParticipantState
 from server.matchmaker import AlreadyQueuedError, MatchFound
@@ -80,6 +79,57 @@ def test_client_message_router_class_has_no_json_or_websocket_specific_dependenc
     assert "websockets" not in source
 
 
+@pytest.mark.parametrize(
+    "message_type, handler_name",
+    [
+        (Login, "_route_login"),
+        (MoveIntent, "_route_move_intent"),
+        (JumpIntent, "_route_jump_intent"),
+        (PlayIntent, "_route_play_intent"),
+        (CreateRoomIntent, "_route_create_room_intent"),
+        (JoinRoomIntent, "_route_join_room_intent"),
+    ],
+)
+def test_every_supported_message_type_is_registered_to_its_own_handler(message_type, handler_name):
+    router, _, _ = _make_router()
+
+    assert router._handlers_by_type[message_type] == getattr(router, handler_name)
+
+
+def test_the_handler_registry_covers_exactly_the_supported_message_types():
+    router, _, _ = _make_router()
+
+    assert set(router._handlers_by_type) == {
+        Login, MoveIntent, JumpIntent, PlayIntent, CreateRoomIntent, JoinRoomIntent,
+    }
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        Login(username="alice", password="hunter2"),
+        MoveIntent(source=POSITION, destination=POSITION),
+        JumpIntent(position=POSITION),
+        PlayIntent(),
+        CreateRoomIntent(),
+        JoinRoomIntent(join_code="abc"),
+    ],
+    ids=lambda m: type(m).__name__,
+)
+def test_route_dispatches_every_supported_message_type_without_raising_unrecognized(message):
+    # A message type this router doesn't know about raises MessageRejected with an
+    # "unrecognized message type" reason (see test_an_unrecognized_message_type_is_
+    # rejected below) - none of the genuinely supported types should ever hit that path,
+    # regardless of what the participant's state does to the handler's own behavior.
+    router, _, _ = _make_router()
+    participant = _make_participant(ParticipantState.LOBBY, authenticated=False)
+
+    try:
+        router.route(participant, message)
+    except MessageRejected as rejection:
+        assert "unrecognized message type" not in rejection.reason
+
+
 def test_a_second_login_after_authentication_is_rejected():
     router, _, _ = _make_router()
     participant = _make_participant(ParticipantState.LOBBY, authenticated=True)
@@ -142,7 +192,7 @@ def test_a_room_intent_while_already_in_a_room_is_rejected():
     participant = _make_participant(ParticipantState.IN_ROOM)
 
     with pytest.raises(MessageRejected):
-        router.route(participant, RoomIntent(action=RoomAction.CREATE))
+        router.route(participant, CreateRoomIntent())
 
 
 def test_a_play_intent_while_already_in_a_room_is_rejected():
@@ -157,24 +207,24 @@ def test_an_unrecognized_message_type_is_rejected():
     router, _, _ = _make_router()
     participant = _make_participant(ParticipantState.LOBBY)
 
-    with pytest.raises(MessageRejected):
+    with pytest.raises(MessageRejected, match="unrecognized message type 'LoggedIn'"):
         router.route(participant, LoggedIn(username="alice", rating=1200))
 
 
-def test_a_room_intent_to_create_dispatches_to_create_private_room():
+def test_a_create_room_intent_dispatches_to_create_private_room():
     router, game_room_registry, _ = _make_router()
     participant = _make_participant(ParticipantState.LOBBY)
 
-    router.route(participant, RoomIntent(action=RoomAction.CREATE))
+    router.route(participant, CreateRoomIntent())
 
     assert game_room_registry.create_private_room_calls == [participant]
 
 
-def test_a_room_intent_to_join_dispatches_to_join_private_room_with_the_room_id():
+def test_a_join_room_intent_dispatches_to_join_private_room_with_the_join_code():
     router, game_room_registry, _ = _make_router()
     participant = _make_participant(ParticipantState.LOBBY)
 
-    router.route(participant, RoomIntent(action=RoomAction.JOIN, room_id="abc"))
+    router.route(participant, JoinRoomIntent(join_code="abc"))
 
     assert game_room_registry.join_private_room_calls == [(participant, "abc")]
 
@@ -183,17 +233,17 @@ def test_a_room_intent_while_searching_is_allowed_through_to_the_game_room_regis
     router, game_room_registry, _ = _make_router()
     participant = _make_participant(ParticipantState.SEARCHING)
 
-    router.route(participant, RoomIntent(action=RoomAction.CREATE))
+    router.route(participant, CreateRoomIntent())
 
     assert game_room_registry.create_private_room_calls == [participant]
 
 
-def test_a_room_intent_to_join_an_unknown_room_returns_a_room_placement_rejected():
+def test_a_join_room_intent_to_an_unknown_room_returns_a_room_placement_rejected():
     router, game_room_registry, _ = _make_router()
     game_room_registry.join_result = None
     participant = _make_participant(ParticipantState.LOBBY)
 
-    result = router.route(participant, RoomIntent(action=RoomAction.JOIN, room_id="no-such-room"))
+    result = router.route(participant, JoinRoomIntent(join_code="no-such-code"))
 
     assert isinstance(result, RoomPlacementRejected)
     assert result.reason

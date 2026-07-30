@@ -4,9 +4,8 @@ import json
 import websockets
 
 import server.ws_server as ws_server
-from protocol.message_types import RoomAction
 from protocol.game_messages import MoveIntent
-from protocol.lobby_messages import Login, RoomIntent
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login
 from protocol.registry import message_to_payload
 from model.position import Position
 from server.rating import RatingStore
@@ -79,7 +78,7 @@ def test_login_create_room_join_room_and_a_move_is_visible_to_both(monkeypatch):
             assert logged_in_a["username"] == "alice"
             assert logged_in_a["rating"] == 1200
 
-            await client_a.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
+            await client_a.send(json.dumps(message_to_payload(CreateRoomIntent())))
             role_a = await _expect(client_a, "RoleAssigned")
             assert role_a["role"] == "white"
             room_id = role_a["room_id"]
@@ -87,7 +86,7 @@ def test_login_create_room_join_room_and_a_move_is_visible_to_both(monkeypatch):
 
             client_b = await _connect(uri)
             await _login(client_b, "bob")
-            await client_b.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
+            await client_b.send(json.dumps(message_to_payload(JoinRoomIntent(join_code=room_id))))
             role_b = await _expect(client_b, "RoleAssigned")
             assert role_b["role"] == "black"
             snapshot_b = await _expect(client_b, "GameSnapshot")

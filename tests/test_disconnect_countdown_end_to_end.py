@@ -4,8 +4,7 @@ import json
 import websockets
 
 import server.ws_server as ws_server
-from protocol.message_types import RoomAction
-from protocol.lobby_messages import Login, RoomIntent
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login
 from protocol.registry import message_to_payload
 from server.rating import RatingStore
 from server.user_store import UserStore
@@ -62,12 +61,12 @@ def test_a_mid_game_disconnect_broadcasts_a_countdown_and_eventually_resigns(mon
             await _login(client_a, "alice")
             await _login(client_b, "bob")
 
-            await client_a.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
+            await client_a.send(json.dumps(message_to_payload(CreateRoomIntent())))
             role_a = await _expect(client_a, "RoleAssigned")
             await _expect(client_a, "GameSnapshot")
 
             room_id = role_a["room_id"]
-            await client_b.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
+            await client_b.send(json.dumps(message_to_payload(JoinRoomIntent(join_code=room_id))))
             await _expect(client_b, "RoleAssigned")
             await _expect(client_b, "GameSnapshot")
 

@@ -3,8 +3,7 @@ import json
 
 import websockets
 
-from protocol.lobby_messages import Login, RoomIntent
-from protocol.message_types import RoomAction
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login
 from protocol.registry import message_to_payload
 from server import ws_server
 
@@ -26,7 +25,7 @@ async def _login(connection, username):
 
 async def _create_room(connection, username):
     await _login(connection, username)
-    await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.CREATE))))
+    await connection.send(json.dumps(message_to_payload(CreateRoomIntent())))
     role_message = await _expect(connection, "RoleAssigned")
     assert role_message["role"] == "white", role_message
     await _expect(connection, "GameSnapshot")
@@ -36,7 +35,7 @@ async def _create_room(connection, username):
 
 async def _join_room(connection, username, room_id, expected_role):
     await _login(connection, username)
-    await connection.send(json.dumps(message_to_payload(RoomIntent(action=RoomAction.JOIN, room_id=room_id))))
+    await connection.send(json.dumps(message_to_payload(JoinRoomIntent(join_code=room_id))))
     role_message = await _expect(connection, "RoleAssigned")
     assert role_message["role"] == expected_role, role_message
     await _expect(connection, "GameSnapshot")

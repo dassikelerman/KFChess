@@ -41,9 +41,9 @@ Ownership checks (does this connection own this piece?) happen in
 `GameSession`, not `GameEngine` - a wrong-color attempt is unicast straight
 back to the sender as an `IllegalActionEvent` and never reaches the engine.
 
-Login and room/matchmaking intents (`Login`, `PlayIntent`, `RoomIntent`) take
-the same decode -> route path but land in `Matchmaker` / `GameRoomRegistry`
-instead of a `GameSession`.
+Login and room/matchmaking intents (`Login`, `PlayIntent`, `CreateRoomIntent`,
+`JoinRoomIntent`) take the same decode -> route path but land in `Matchmaker` /
+`GameRoomRegistry` instead of a `GameSession`.
 
 ## Server -> client snapshot/event flow
 

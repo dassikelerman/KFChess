@@ -5,7 +5,6 @@ import time
 from client.server_connection import EventReceived, ServerConnection, SnapshotReceived
 from model.position import Position
 from protocol.lobby_messages import LoggedIn, RoleAssigned
-from protocol.message_types import RoomAction
 from server.ws_server import HOST, PORT
 
 STARTUP_WAIT_S = 1
@@ -58,7 +57,7 @@ def main():
         mover.start()
         mover.send_login("mover", "devpass")
         _wait_for_event(mover, LoggedIn, SNAPSHOT_TIMEOUT_S)
-        mover.send_room_intent(RoomAction.CREATE)
+        mover.send_create_room_intent()
         role_assigned = _wait_for_event(mover, RoleAssigned, SNAPSHOT_TIMEOUT_S)
         print(f"OK: 'mover' created room {role_assigned.room_id!r} and is seated as white")
 
