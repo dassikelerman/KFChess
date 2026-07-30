@@ -70,6 +70,7 @@ class GameRoomRegistry:
         self._sessions_by_room_id = {}
         self._connections_by_room_id = {}
         self._participants_by_room_id = {}
+        self._usernames_by_room_id = {}
         self._join_codes_by_room_id = {}
         self._closing_after_ms = {}
         self._ms_since_heartbeat = 0
@@ -200,6 +201,7 @@ class GameRoomRegistry:
             # instead of a Redis-side race).
             self._connections_by_room_id.pop(room_id, None)
             self._participants_by_room_id.pop(room_id, None)
+            self._usernames_by_room_id.pop(room_id, None)
             self._sessions_by_room_id.pop(room_id, None)
             self._directory.close_room(room_id, usernames, join_code=join_code)
             raise
@@ -210,6 +212,7 @@ class GameRoomRegistry:
     def _build_local_room(self, room_id):
         self._connections_by_room_id[room_id] = set()
         self._participants_by_room_id[room_id] = {}
+        self._usernames_by_room_id[room_id] = set()
 
         session = GameSession(
             constants.STANDARD_START_BOARD,
@@ -243,6 +246,7 @@ class GameRoomRegistry:
         session.record_login(participant.connection, participant.username)
         self._connections_by_room_id[room_id].add(participant.connection)
         self._participants_by_room_id[room_id][participant.connection] = participant
+        self._usernames_by_room_id[room_id].add(participant.username)
         participant.role = role
         participant.room_id = room_id
         participant.state = ParticipantState.IN_ROOM
@@ -283,12 +287,16 @@ class GameRoomRegistry:
         self._broadcast_to_room(room_id, snapshot_to_payload(snapshot, clock_ms))
 
     def _close_room(self, room_id):
-        usernames = []
         for participant in self._participants_by_room_id.pop(room_id, {}).values():
             participant.state = ParticipantState.LOBBY
             participant.room_id = None
             participant.role = None
-            usernames.append(participant.username)
+        # Every username ever seated here, not just the ones still connected - a
+        # participant who disconnected mid-game was already dropped from
+        # _participants_by_room_id above (by remove_participant), but their
+        # directory:user:{username} entry still needs clearing or they get a false
+        # "already in a room" on their next create/join attempt.
+        usernames = self._usernames_by_room_id.pop(room_id, set())
         join_code = self._join_codes_by_room_id.pop(room_id, None)
         self._directory.close_room(room_id, usernames, join_code=join_code)
         self._connections_by_room_id.pop(room_id, None)

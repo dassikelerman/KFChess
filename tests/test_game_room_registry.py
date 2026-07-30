@@ -521,6 +521,42 @@ def test_close_room_does_not_touch_a_participant_that_already_disconnected():
     asyncio.run(scenario())
 
 
+def test_close_room_removes_the_directory_entry_of_a_participant_who_disconnected_mid_game():
+    # Regression test: a participant who disconnects mid-game is dropped from
+    # _participants_by_room_id right away (see remove_participant), so _close_room used to
+    # build its directory-cleanup usernames list only from whoever was still connected -
+    # the disconnected player's directory:user:{username} entry survived the room closing
+    # and falsely reported them as "already in a room" on their next create/join attempt.
+    async def scenario():
+        directory = _make_directory()
+        registry = GameRoomRegistry(
+            lambda connection, payload: None, _FakeRatingStore(), directory, room_close_grace_seconds=1,
+        )
+        white_participant = _make_participant("white")
+        black_participant = _make_participant("black")
+        placement = registry.create_private_room(white_participant)
+        registry.join_private_room(black_participant, placement.join_code)
+
+        await registry.remove_participant(white_participant)  # drops mid-game, before it ends
+        assert directory.get_room_for_username("white") == placement.room_id  # still reserved while the game is live
+
+        placement.session.components.engine.resign(PieceColor.WHITE)  # black wins
+        registry.tick(1100)  # past the grace period - room closes
+
+        assert placement.room_id not in registry._sessions_by_room_id
+        assert directory.get_room_for_username("white") is None
+        assert directory.get_room_for_username("black") is None
+
+        # white must be able to open a brand-new room - no false "already in a room".
+        new_white_participant = Participant(connection="conn-white-2", username="white")
+        new_placement = registry.create_private_room(new_white_participant)
+        assert new_placement.room_id != placement.room_id
+
+        await registry.remove_participant(new_white_participant)
+
+    asyncio.run(scenario())
+
+
 def test_close_room_resets_a_reconnected_participant_not_the_stale_pre_reconnect_one():
     async def scenario():
         registry = GameRoomRegistry(
