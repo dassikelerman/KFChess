@@ -7,9 +7,10 @@ from server.client_connection import ClientConnection
 
 
 class FakeRawConnection:
-    def __init__(self, incoming=(), raise_closed_on_recv=False):
+    def __init__(self, incoming=(), raise_closed_on_recv=False, raise_closed_on_send=False):
         self._incoming = list(incoming)
         self._raise_closed_on_recv = raise_closed_on_recv
+        self._raise_closed_on_send = raise_closed_on_send
         self.sent = []
         self.closed = None
 
@@ -21,6 +22,8 @@ class FakeRawConnection:
         await asyncio.Event().wait()
 
     async def send(self, data):
+        if self._raise_closed_on_send:
+            raise websockets.ConnectionClosed(None, None)
         self.sent.append(data)
 
     async def close(self, code=1000, reason=""):
@@ -79,6 +82,16 @@ def test_send_payload_json_encodes_the_dict_onto_the_raw_connection():
     asyncio.run(connection.send_payload({"type": "LoggedIn", "username": "alice"}))
 
     assert raw.sent == [json.dumps({"type": "LoggedIn", "username": "alice"})]
+
+
+def test_send_payload_swallows_a_connection_closed_race_instead_of_raising():
+    # A reply can race the socket closing (disconnect countdown, other side dropping the
+    # room) - ClientSession's own coroutine must not blow up because of it, same as
+    # ws_server._unicast already tolerates on the broadcast path.
+    raw = FakeRawConnection(raise_closed_on_send=True)
+    connection = ClientConnection(raw)
+
+    asyncio.run(connection.send_payload({"type": "GameSnapshot"}))  # must not raise
 
 
 def test_close_forwards_the_code_and_reason_to_the_raw_connection():

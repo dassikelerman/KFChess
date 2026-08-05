@@ -28,7 +28,15 @@ class ClientConnection:
             return None
 
     async def send_payload(self, payload):
-        await self._raw.send(json.dumps(payload))
+        # A reply can race a disconnect (the countdown auto-resigning, the other side
+        # dropping the room) - the raw socket closing between when ClientSession decided
+        # to reply and when this actually sends must not blow up the session's own
+        # coroutine. Mirrors ws_server._unicast's existing handling of the same race on
+        # the broadcast path.
+        try:
+            await self._raw.send(json.dumps(payload))
+        except websockets.ConnectionClosed:
+            pass
 
     async def close(self, code, reason):
         await self._raw.close(code=code, reason=reason)
