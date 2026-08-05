@@ -7,7 +7,7 @@ nothing about sockets or JSON - GameRoomRegistry builds it fully wired, and
 NetworkPublisher turns its dispatcher events into wire messages.
 
 handle_move/handle_jump take already-decoded MoveIntent/JumpIntent objects - the typed
-message ConnectionLifecycle decoded off the wire, unchanged all the way from
+message ClientSession decoded off the wire, unchanged all the way from
 ClientMessageRouter. Nothing in this file ever converts to or from a dict.
 
 Disconnect countdowns are simulated time, not real time: tick(dt_ms) - the same call

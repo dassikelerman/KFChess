@@ -1,3 +1,5 @@
+import threading
+
 import psycopg2
 
 import constants
@@ -25,6 +27,11 @@ class RatingStore:
         # later block a DROP TABLE from some other, unrelated connection.
         self._connection = psycopg2.connect(database_url)
         self._connection.autocommit = True
+        # AuthService (server/auth_service.py) runs get_rating off the event-loop thread
+        # via asyncio.to_thread, so this connection can now be touched from a worker
+        # thread concurrently with update_ratings running on the main thread inside a
+        # room's tick - the lock keeps every method here to one caller at a time.
+        self._lock = threading.Lock()
         with self._connection.cursor() as cursor:
             cursor.execute(
                 f"""
@@ -38,14 +45,18 @@ class RatingStore:
             )
 
     def get_rating(self, username):
-        with self._connection.cursor() as cursor:
+        with self._lock, self._connection.cursor() as cursor:
             cursor.execute("SELECT rating FROM users WHERE username = %s", (username,))
             row = cursor.fetchone()
         return row[0]
 
     def update_ratings(self, white_username, black_username, winner_color):
-        white_rating = self.get_rating(white_username)
-        black_rating = self.get_rating(black_username)
+        with self._lock:
+            return self._update_ratings_locked(white_username, black_username, winner_color)
+
+    def _update_ratings_locked(self, white_username, black_username, winner_color):
+        white_rating = self._get_rating_locked(white_username)
+        black_rating = self._get_rating_locked(black_username)
 
         white_score, black_score = _actual_scores(winner_color)
         white_expected = _expected_score(white_rating, black_rating)
@@ -71,3 +82,8 @@ class RatingStore:
             self._connection.autocommit = True
 
         return new_white, new_black
+
+    def _get_rating_locked(self, username):
+        with self._connection.cursor() as cursor:
+            cursor.execute("SELECT rating FROM users WHERE username = %s", (username,))
+            return cursor.fetchone()[0]

@@ -71,9 +71,9 @@ def _make_router():
 
 def test_client_message_router_class_has_no_json_or_websocket_specific_dependencies():
     # ClientMessageRouter must stay fully decoupled from the wire format - it only ever
-    # sees already-typed messages ConnectionLifecycle decoded, never json or websockets.
-    # ConnectionLifecycle (same module) does need both, so this checks the class's own
-    # source, not the whole file.
+    # sees already-typed messages ClientSession decoded, never json or websockets.
+    # RoomPlacementRejected (same module) does need message_to_payload, so this checks
+    # the class's own source, not the whole file.
     source = inspect.getsource(ClientMessageRouter)
     assert "json" not in source
     assert "websockets" not in source

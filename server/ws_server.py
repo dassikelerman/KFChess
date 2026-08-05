@@ -1,12 +1,12 @@
 """Server entry point: wire every collaborator together and run the accept loop.
 
 `python -m server.ws_server` is the whole server-side story in one file: build a
-UserStore/RatingStore/GameRoomRegistry/Matchmaker/ClientMessageRouter, hand each new
-WebSocket connection to a ConnectionLifecycle, and run the one global server loop
-alongside it - matchmaking expiry and every room's game tick share this single
-asyncio.sleep(), there is no per-room task and no separate expiry task. Everything each
-of those classes actually decides is synchronous and typed (see
-server/connection_lifecycle.py) - this file is only the async wiring, the real
+UserStore/RatingStore/AuthService/GameRoomRegistry/Matchmaker/ClientMessageRouter/
+ParticipantLifecycle, hand each new WebSocket connection to a ClientSession, and run the
+one global server loop alongside it - matchmaking expiry and every room's game tick
+share this single asyncio.sleep(), there is no per-room task and no separate expiry
+task. Everything each of those classes actually decides is synchronous and typed (see
+server/client_session.py) - this file is only the async wiring, the real
 websockets.serve() call, and the loop that measures elapsed time and ticks everything.
 """
 
@@ -21,10 +21,12 @@ import constants
 from logging_setup import configure_logging
 from protocol.lobby_messages import MatchNotFound
 from protocol.registry import message_to_payload
+from server.auth_service import AuthService
 from server.client_message_router import ClientMessageRouter
-from server.connection_lifecycle import ConnectionLifecycle
+from server.client_session import ClientSession
 from server.contracts import MessageSender, ParticipantState
 from server.matchmaker import Matchmaker
+from server.participant_lifecycle import ParticipantLifecycle
 from server.rating import RatingStore
 from server.rooms import GameRoomRegistry
 from server.user_store import UserStore
@@ -70,19 +72,17 @@ async def main():
     configure_logging(constants.SERVER_LOG_PATH)
     user_store = UserStore()
     rating_store = RatingStore()
+    auth_service = AuthService(user_store, rating_store)
     room_registry = GameRoomRegistry(_unicast, rating_store, disconnect_countdown_seconds=DISCONNECT_COUNTDOWN_SECONDS)
     matchmaker = Matchmaker(expiry_seconds=MATCH_EXPIRY_S)
     router = ClientMessageRouter(room_registry, matchmaker)
+    participant_lifecycle = ParticipantLifecycle(matchmaker, room_registry)
 
-    async def on_disconnect(participant):
-        matchmaker.cancel_search(participant)
-        await room_registry.remove_participant(participant)
-
-    connection_lifecycle = ConnectionLifecycle(user_store, rating_store, router, on_disconnect)
+    client_session = ClientSession(auth_service, router, participant_lifecycle.leave)
 
     server_loop_task = asyncio.create_task(_run_server_loop(matchmaker, room_registry, _unicast))
     try:
-        async with websockets.serve(connection_lifecycle.run, HOST, PORT, close_timeout=CLOSE_TIMEOUT_S):
+        async with websockets.serve(client_session.run, HOST, PORT, close_timeout=CLOSE_TIMEOUT_S):
             logger.info("KFChess server listening on ws://%s:%s", HOST, PORT)
             await asyncio.Future()
     finally:

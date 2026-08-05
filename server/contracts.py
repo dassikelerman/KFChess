@@ -1,6 +1,6 @@
 """Shared server-side data types and Protocols - no behavior of their own.
 
-Participant is plain data: ConnectionLifecycle fills in the auth fields as a connection
+Participant is plain data: ClientSession fills in the auth fields as a connection
 logs in, GameRoomRegistry fills in the room/role fields once it's seated, and
 ClientMessageRouter only ever reads `.state` to decide whether a message is currently
 allowed. A participant starts as just a connection and, over its life, becomes a player

@@ -36,6 +36,9 @@ class RoomPlacement:
     session: GameSession
     role: str
 
+    def outbound_payloads(self):
+        return list(build_room_placement_payloads(self))
+
 
 def build_room_placement_payloads(placement):
     role_payload = message_to_payload(RoleAssigned(role=placement.role, room_id=placement.room_id))
@@ -63,14 +66,24 @@ class GameRoomRegistry:
     def create_private_room(self, participant):
         room_id, session = self._open_room()
         role = self._place_participant_in_room(room_id, session, participant)
-        return RoomPlacement(room_id=room_id, session=session, role=role)
+        placement = RoomPlacement(room_id=room_id, session=session, role=role)
+        self._log_placed(participant, placement)
+        return placement
 
     def join_private_room(self, participant, room_id):
         session = self._sessions_by_room_id.get(room_id)
         if session is None:
             return None
         role = self._place_participant_in_room(room_id, session, participant)
-        return RoomPlacement(room_id=room_id, session=session, role=role)
+        placement = RoomPlacement(room_id=room_id, session=session, role=role)
+        self._log_placed(participant, placement)
+        return placement
+
+    def _log_placed(self, participant, placement):
+        logger.info(
+            "placed in room: connection_id=%s username=%s room_id=%s role=%s",
+            participant.connection_id, participant.username, placement.room_id, placement.role,
+        )
 
     def create_matched_room(self, white_participant, black_participant):
         room_id, session = self._open_room()
@@ -94,7 +107,12 @@ class GameRoomRegistry:
             participant.role = role
             participant.room_id = room_id
             participant.state = ParticipantState.IN_ROOM
-            return RoomPlacement(room_id=room_id, session=session, role=role)
+            placement = RoomPlacement(room_id=room_id, session=session, role=role)
+            logger.info(
+                "reconnected: connection_id=%s username=%s room_id=%s role=%s",
+                participant.connection_id, participant.username, placement.room_id, placement.role,
+            )
+            return placement
         return None
 
     async def remove_participant(self, participant):

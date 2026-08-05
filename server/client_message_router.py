@@ -5,14 +5,20 @@ one entry per supported message class, mapping straight to its own private handl
 method. Checks the participant's own state (already in a room? already authenticated?)
 before doing anything, then delegates to a GameRoomRegistry, a Matchmaker, or a
 GameSession. Every message here is already a typed object decoded once by
-ConnectionLifecycle - this class never touches a socket, JSON, or a dict.
+ClientSession - this class never touches a socket, JSON, or a dict.
+
+RoomPlacementRejected (below) is the one exception in this module, not this class: it
+owns turning itself into an outbound payload via outbound_payloads(), the same
+interface RoomPlacement (server/rooms.py) implements, so ClientSession can send back
+whatever route() returns without a type check of its own.
 """
 
 import logging
 from dataclasses import dataclass
 
 from protocol.game_messages import JumpIntent, MoveIntent
-from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login, PlayIntent
+from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login, PlayIntent, RoomRejected
+from protocol.registry import message_to_payload
 from server.contracts import ParticipantState
 from server.matchmaker import AlreadyQueuedError, MatchFound
 
@@ -28,6 +34,9 @@ class MessageRejected(Exception):
 @dataclass(frozen=True)
 class RoomPlacementRejected:
     reason: str
+
+    def outbound_payloads(self):
+        return [message_to_payload(RoomRejected(reason=self.reason))]
 
 
 class ClientMessageRouter:

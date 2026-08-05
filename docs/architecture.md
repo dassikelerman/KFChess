@@ -31,7 +31,7 @@ mouse click / key
   -> input.Controller               (click/jump -> ActionSink call)
   -> client.ServerConnection        (typed MoveIntent/JumpIntent -> outbound queue)
   -> [wire: JSON, encode_json_message]
-  -> server.ConnectionLifecycle      (decode_json_message once)
+  -> server.ClientSession            (decode_json_message once)
   -> server.ClientMessageRouter      (check participant.state, dispatch)
   -> server.GameSession.handle_move/handle_jump
   -> engine.GameEngine.request_move/request_jump

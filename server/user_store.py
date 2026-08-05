@@ -1,6 +1,7 @@
 import hashlib
 import os
 import secrets
+import threading
 from enum import StrEnum
 
 import psycopg2
@@ -36,6 +37,11 @@ class UserStore:
         # to commit could sit on a connection indefinitely and block a later DROP TABLE.
         self._connection = psycopg2.connect(database_url)
         self._connection.autocommit = True
+        # AuthService (server/auth_service.py) runs create_or_verify off the event-loop
+        # thread via asyncio.to_thread, so this connection can now be touched from a
+        # worker thread - psycopg2 connections aren't safe for two threads to use at
+        # once without one, even though each individual call is already single-threaded.
+        self._lock = threading.Lock()
         with self._connection.cursor() as cursor:
             cursor.execute(
                 f"""
@@ -49,7 +55,7 @@ class UserStore:
             )
 
     def create_or_verify(self, username, password):
-        with self._connection.cursor() as cursor:
+        with self._lock, self._connection.cursor() as cursor:
             cursor.execute(
                 "SELECT password_hash, password_salt FROM users WHERE username = %s", (username,),
             )

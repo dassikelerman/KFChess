@@ -5,8 +5,9 @@ import pytest
 
 from protocol.lobby_messages import CreateRoomIntent, JoinRoomIntent, Login
 from protocol.registry import message_to_payload
+from server.auth_service import AuthService
 from server.client_message_router import ClientMessageRouter
-from server.connection_lifecycle import ConnectionLifecycle
+from server.client_session import ClientSession
 from server.contracts import Participant, ParticipantState
 from server.rating import RatingStore
 from server.rooms import GameRoomRegistry
@@ -62,23 +63,24 @@ def _make_stores():
     return UserStore(), RatingStore()
 
 
-def _make_lifecycle(user_store, rating_store):
+def _make_session(user_store, rating_store):
     router = ClientMessageRouter(FakeGameRoomRegistry(), FakeMatchmaker())
+    auth_service = AuthService(user_store, rating_store)
     disconnect_calls = []
 
     async def on_disconnect(participant):
         disconnect_calls.append(participant)
 
-    lifecycle = ConnectionLifecycle(user_store, rating_store, router, on_disconnect)
-    return lifecycle, disconnect_calls
+    session = ClientSession(auth_service, router, on_disconnect)
+    return session, disconnect_calls
 
 
 def test_a_successful_login_reaches_lobby_and_receives_logged_in():
     user_store, rating_store = _make_stores()
-    lifecycle, disconnect_calls = _make_lifecycle(user_store, rating_store)
+    session, disconnect_calls = _make_session(user_store, rating_store)
     connection = FakeConnection([_login_message("alice")])
 
-    asyncio.run(lifecycle.run(connection))
+    asyncio.run(session.run(connection))
 
     sent_types = [json.loads(payload)["type"] for payload in connection.sent]
     assert sent_types == ["LoggedIn"]
@@ -93,10 +95,10 @@ def test_a_successful_login_reaches_lobby_and_receives_logged_in():
 def test_a_wrong_password_is_rejected_and_closed_without_reaching_the_lobby():
     user_store, rating_store = _make_stores()
     user_store.create_or_verify("alice", "correct-password")
-    lifecycle, disconnect_calls = _make_lifecycle(user_store, rating_store)
+    session, disconnect_calls = _make_session(user_store, rating_store)
     connection = FakeConnection([_login_message("alice", "wrong-password")])
 
-    asyncio.run(lifecycle.run(connection))
+    asyncio.run(session.run(connection))
 
     assert connection.sent == []
     assert connection.closed is not None
@@ -106,10 +108,10 @@ def test_a_wrong_password_is_rejected_and_closed_without_reaching_the_lobby():
 
 def test_a_malformed_login_is_rejected_and_closed_without_reaching_the_lobby():
     user_store, rating_store = _make_stores()
-    lifecycle, disconnect_calls = _make_lifecycle(user_store, rating_store)
+    session, disconnect_calls = _make_session(user_store, rating_store)
     connection = FakeConnection(["not json {"])
 
-    asyncio.run(lifecycle.run(connection))
+    asyncio.run(session.run(connection))
 
     assert connection.sent == []
     assert connection.closed is not None
@@ -119,23 +121,23 @@ def test_a_malformed_login_is_rejected_and_closed_without_reaching_the_lobby():
 
 def test_the_disconnect_callback_fires_exactly_once_even_when_an_error_occurs_mid_handling():
     user_store, rating_store = _make_stores()
-    lifecycle, disconnect_calls = _make_lifecycle(user_store, rating_store)
+    session, disconnect_calls = _make_session(user_store, rating_store)
     connection = FakeConnection([_login_message("alice")])
     connection.send_should_fail = True
 
     with pytest.raises(RuntimeError):
-        asyncio.run(lifecycle.run(connection))
+        asyncio.run(session.run(connection))
 
     assert len(disconnect_calls) == 1
 
 
 def test_no_password_or_hash_or_salt_ever_appears_in_the_logs(caplog):
     user_store, rating_store = _make_stores()
-    lifecycle, _ = _make_lifecycle(user_store, rating_store)
+    session, _ = _make_session(user_store, rating_store)
     connection = FakeConnection([_login_message("alice", "super-secret-password")])
 
     with caplog.at_level("DEBUG"):
-        asyncio.run(lifecycle.run(connection))
+        asyncio.run(session.run(connection))
 
     assert "super-secret-password" not in caplog.text
 
@@ -143,11 +145,11 @@ def test_no_password_or_hash_or_salt_ever_appears_in_the_logs(caplog):
 def test_no_password_appears_in_the_logs_even_on_a_wrong_password_rejection(caplog):
     user_store, rating_store = _make_stores()
     user_store.create_or_verify("alice", "correct-password")
-    lifecycle, _ = _make_lifecycle(user_store, rating_store)
+    session, _ = _make_session(user_store, rating_store)
     connection = FakeConnection([_login_message("alice", "wrong-super-secret-password")])
 
     with caplog.at_level("DEBUG"):
-        asyncio.run(lifecycle.run(connection))
+        asyncio.run(session.run(connection))
 
     assert "wrong-super-secret-password" not in caplog.text
     assert "correct-password" not in caplog.text
@@ -156,7 +158,7 @@ def test_no_password_appears_in_the_logs_even_on_a_wrong_password_rejection(capl
 # -- Part 4: real ROOM flow (real GameRoomRegistry + real ClientMessageRouter) ----
 
 
-def _make_real_lifecycle(user_store, rating_store):
+def _make_real_session(user_store, rating_store):
     sent = []
 
     def send_fn(connection, payload):
@@ -164,26 +166,27 @@ def _make_real_lifecycle(user_store, rating_store):
 
     game_room_registry = GameRoomRegistry(send_fn, rating_store)
     router = ClientMessageRouter(game_room_registry, Matchmaker())
+    auth_service = AuthService(user_store, rating_store)
     disconnect_calls = []
 
     async def on_disconnect(participant):
         disconnect_calls.append(participant)
         await game_room_registry.remove_participant(participant)
 
-    lifecycle = ConnectionLifecycle(user_store, rating_store, router, on_disconnect)
-    return lifecycle, game_room_registry, disconnect_calls
+    session = ClientSession(auth_service, router, on_disconnect)
+    return session, game_room_registry, disconnect_calls
 
 
 def test_create_room_sequence_receives_role_then_snapshot_in_order():
     async def scenario():
         user_store, rating_store = _make_stores()
-        lifecycle, _, _ = _make_real_lifecycle(user_store, rating_store)
+        session, _, _ = _make_real_session(user_store, rating_store)
         connection = FakeConnection([
             _login_message("alice"),
             json.dumps(message_to_payload(CreateRoomIntent())),
         ])
 
-        await lifecycle.run(connection)
+        await session.run(connection)
 
         sent_types = [json.loads(payload)["type"] for payload in connection.sent]
         assert sent_types == ["LoggedIn", "RoleAssigned", "GameSnapshot"]
@@ -197,13 +200,13 @@ def test_create_room_sequence_receives_role_then_snapshot_in_order():
 def test_join_with_an_unknown_room_id_receives_room_rejected_and_stays_in_lobby():
     async def scenario():
         user_store, rating_store = _make_stores()
-        lifecycle, _, disconnect_calls = _make_real_lifecycle(user_store, rating_store)
+        session, _, disconnect_calls = _make_real_session(user_store, rating_store)
         connection = FakeConnection([
             _login_message("alice"),
             json.dumps(message_to_payload(JoinRoomIntent(join_code="no-such-room"))),
         ])
 
-        await lifecycle.run(connection)
+        await session.run(connection)
 
         sent_types = [json.loads(payload)["type"] for payload in connection.sent]
         assert sent_types == ["LoggedIn", "RoomRejected"]
@@ -216,7 +219,7 @@ def test_join_with_an_unknown_room_id_receives_room_rejected_and_stays_in_lobby(
 def test_a_second_client_joining_an_existing_room_gets_black_and_the_rooms_real_snapshot():
     async def scenario():
         user_store, rating_store = _make_stores()
-        lifecycle, game_room_registry, _ = _make_real_lifecycle(user_store, rating_store)
+        session, game_room_registry, _ = _make_real_session(user_store, rating_store)
         creator_client = Participant(connection="creator-conn")
         placement = game_room_registry.create_private_room(creator_client)
 
@@ -225,7 +228,7 @@ def test_a_second_client_joining_an_existing_room_gets_black_and_the_rooms_real_
             json.dumps(message_to_payload(JoinRoomIntent(join_code=placement.room_id))),
         ])
 
-        await lifecycle.run(second_connection)
+        await session.run(second_connection)
 
         sent_types = [json.loads(payload)["type"] for payload in second_connection.sent]
         assert sent_types == ["LoggedIn", "RoleAssigned", "GameSnapshot"]
